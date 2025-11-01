@@ -1,0 +1,641 @@
+databaseChangeLog:
+  # =============================================================================
+  # 004 - CONSTRAINTS & TRIGGERS (Contraintes et déclencheurs)
+  # =============================================================================
+  # Règles métier critiques implémentées via triggers PostgreSQL :
+  # - Équilibrage automatique des écritures comptables (débit = crédit)
+  # - Mise à jour automatique des totaux de factures
+  # - Mise à jour automatique des soldes de paiement
+  # - Calcul automatique des montants TTC
+  # - Mise à jour des timestamps (updated_at)
+  # - Validation des statuts et transitions d'états
+  # - Audit automatique
+  #
+  # Architecture :
+  # - Fonctions SQL réutilisables
+  # - Triggers BEFORE/AFTER selon le besoin
+  # - Gestion des erreurs avec RAISE EXCEPTION
+  # =============================================================================
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 1: Mise à jour automatique de updated_at
+  # Appliqué à toutes les tables avec ce champ
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-01-function-update-timestamp
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION update_updated_at_column()
+              RETURNS TRIGGER AS $$
+              BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION update_updated_at_column() IS
+              'Fonction trigger pour mise à jour automatique du champ updated_at';
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 2: Calcul automatique de l'équilibre GL (débit = crédit)
+  # Calcule total_debit, total_credit, balance_check pour gl_transaction
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-02-function-gl-balance
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION calculate_gl_transaction_balance()
+              RETURNS TRIGGER AS $$
+              DECLARE
+                v_total_debit NUMERIC(20,4);
+                v_total_credit NUMERIC(20,4);
+              BEGIN
+                -- Calculer les totaux depuis les lignes
+                SELECT
+                  COALESCE(SUM(debit_base_amount), 0),
+                  COALESCE(SUM(credit_base_amount), 0)
+                INTO v_total_debit, v_total_credit
+                FROM gl_transaction_line
+                WHERE gl_transaction_id = NEW.id;
+
+                -- Mettre à jour l'en-tête
+                UPDATE gl_transaction
+                SET
+                  total_debit = v_total_debit,
+                  total_credit = v_total_credit,
+                  balance_check = v_total_debit - v_total_credit
+                WHERE id = NEW.id;
+
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION calculate_gl_transaction_balance() IS
+              'Calcule automatiquement les totaux débit/crédit et l''équilibre d''une écriture GL';
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 3: Validation équilibre avant validation GL
+  # Empêche de valider (POSTED) si débit ≠ crédit
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-03-function-validate-gl-balance
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION validate_gl_transaction_before_post()
+              RETURNS TRIGGER AS $$
+              BEGIN
+                -- Si le statut passe à POSTED ou VALIDATED
+                IF NEW.status IN ('POSTED', 'VALIDATED') AND OLD.status = 'DRAFT' THEN
+                  -- Vérifier l'équilibre
+                  IF ABS(NEW.balance_check) > 0.01 THEN
+                    RAISE EXCEPTION 'Cannot post unbalanced transaction. Balance: % (Debit: %, Credit: %)',
+                      NEW.balance_check, NEW.total_debit, NEW.total_credit;
+                  END IF;
+
+                  -- Vérifier qu'il y a au moins 2 lignes
+                  IF (SELECT COUNT(*) FROM gl_transaction_line WHERE gl_transaction_id = NEW.id) < 2 THEN
+                    RAISE EXCEPTION 'Transaction must have at least 2 lines';
+                  END IF;
+
+                  -- Mettre à jour la date de validation
+                  IF NEW.status = 'VALIDATED' AND NEW.validated_at IS NULL THEN
+                    NEW.validated_at = CURRENT_TIMESTAMP;
+                  END IF;
+
+                  IF NEW.status = 'POSTED' AND NEW.posting_date IS NULL THEN
+                    NEW.posting_date = NEW.transaction_date;
+                  END IF;
+                END IF;
+
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION validate_gl_transaction_before_post() IS
+              'Valide l''équilibre d''une écriture avant validation/comptabilisation';
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 4: Calcul automatique des totaux de factures
+  # Pour sales_invoice et purchase_invoice
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-04-function-calculate-invoice-totals
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION calculate_invoice_totals()
+              RETURNS TRIGGER AS $$
+              DECLARE
+                v_subtotal NUMERIC(20,4);
+                v_tax_amount NUMERIC(20,4);
+                v_total NUMERIC(20,4);
+              BEGIN
+                -- Déterminer le type de facture (sales ou purchase)
+                IF TG_TABLE_NAME = 'sales_invoice_line' THEN
+                  -- Calculer les totaux depuis les lignes
+                  SELECT
+                    COALESCE(SUM(line_amount), 0),
+                    COALESCE(SUM(tax_amount), 0),
+                    COALESCE(SUM(line_total), 0)
+                  INTO v_subtotal, v_tax_amount, v_total
+                  FROM sales_invoice_line
+                  WHERE sales_invoice_id = NEW.sales_invoice_id;
+
+                  -- Mettre à jour l'en-tête
+                  UPDATE sales_invoice
+                  SET
+                    subtotal = v_subtotal,
+                    tax_amount = v_tax_amount,
+                    total_amount = v_total,
+                    balance_due = v_total - paid_amount
+                  WHERE id = NEW.sales_invoice_id;
+
+                ELSIF TG_TABLE_NAME = 'purchase_invoice_line' THEN
+                  -- Calculer les totaux depuis les lignes
+                  SELECT
+                    COALESCE(SUM(line_amount), 0),
+                    COALESCE(SUM(tax_amount), 0),
+                    COALESCE(SUM(line_total), 0)
+                  INTO v_subtotal, v_tax_amount, v_total
+                  FROM purchase_invoice_line
+                  WHERE purchase_invoice_id = NEW.purchase_invoice_id;
+
+                  -- Mettre à jour l'en-tête
+                  UPDATE purchase_invoice
+                  SET
+                    subtotal = v_subtotal,
+                    tax_amount = v_tax_amount,
+                    total_amount = v_total,
+                    balance_due = v_total - paid_amount
+                  WHERE id = NEW.purchase_invoice_id;
+                END IF;
+
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION calculate_invoice_totals() IS
+              'Calcule automatiquement les totaux HT, TVA et TTC des factures';
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 5: Calcul automatique ligne facture
+  # Calcule line_amount, tax_amount, line_total
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-05-function-calculate-invoice-line
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION calculate_invoice_line_amounts()
+              RETURNS TRIGGER AS $$
+              BEGIN
+                -- Calculer montant ligne HT après remise
+                NEW.line_amount = (NEW.quantity * NEW.unit_price) - NEW.discount_amount;
+
+                -- Calculer montant TVA
+                NEW.tax_amount = NEW.line_amount * (NEW.tax_rate / 100);
+
+                -- Calculer total ligne TTC
+                NEW.line_total = NEW.line_amount + NEW.tax_amount;
+
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION calculate_invoice_line_amounts() IS
+              'Calcule automatiquement les montants d''une ligne de facture';
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 6: Mise à jour affectation paiements
+  # Met à jour allocated_amount et unallocated_amount dans payment
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-06-function-payment-allocation
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION update_payment_allocation()
+              RETURNS TRIGGER AS $$
+              DECLARE
+                v_allocated NUMERIC(20,4);
+              BEGIN
+                -- Calculer le total affecté
+                SELECT COALESCE(SUM(allocated_amount), 0)
+                INTO v_allocated
+                FROM payment_allocation
+                WHERE payment_id = COALESCE(NEW.payment_id, OLD.payment_id);
+
+                -- Mettre à jour le paiement
+                UPDATE payment
+                SET
+                  allocated_amount = v_allocated,
+                  unallocated_amount = amount - v_allocated
+                WHERE id = COALESCE(NEW.payment_id, OLD.payment_id);
+
+                RETURN COALESCE(NEW, OLD);
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION update_payment_allocation() IS
+              'Met à jour les montants affectés/non affectés d''un règlement';
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 7: Mise à jour paid_amount des factures
+  # Met à jour paid_amount et balance_due après affectation paiement
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-07-function-invoice-payment
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION update_invoice_paid_amount()
+              RETURNS TRIGGER AS $$
+              DECLARE
+                v_paid NUMERIC(20,4);
+                v_invoice_id BIGINT;
+                v_invoice_type VARCHAR(20);
+              BEGIN
+                v_invoice_type = COALESCE(NEW.invoice_type, OLD.invoice_type);
+                v_invoice_id = COALESCE(NEW.sales_invoice_id, NEW.purchase_invoice_id,
+                                       OLD.sales_invoice_id, OLD.purchase_invoice_id);
+
+                IF v_invoice_type = 'SALES' THEN
+                  -- Calculer total payé pour facture client
+                  SELECT COALESCE(SUM(allocated_amount), 0)
+                  INTO v_paid
+                  FROM payment_allocation
+                  WHERE sales_invoice_id = v_invoice_id;
+
+                  -- Mettre à jour la facture
+                  UPDATE sales_invoice
+                  SET
+                    paid_amount = v_paid,
+                    balance_due = total_amount - v_paid,
+                    status = CASE
+                      WHEN v_paid >= total_amount THEN 'PAID'
+                      WHEN v_paid > 0 THEN 'POSTED'
+                      ELSE status
+                    END
+                  WHERE id = v_invoice_id;
+
+                ELSIF v_invoice_type = 'PURCHASE' THEN
+                  -- Calculer total payé pour facture fournisseur
+                  SELECT COALESCE(SUM(allocated_amount), 0)
+                  INTO v_paid
+                  FROM payment_allocation
+                  WHERE purchase_invoice_id = v_invoice_id;
+
+                  -- Mettre à jour la facture
+                  UPDATE purchase_invoice
+                  SET
+                    paid_amount = v_paid,
+                    balance_due = total_amount - v_paid,
+                    status = CASE
+                      WHEN v_paid >= total_amount THEN 'PAID'
+                      WHEN v_paid > 0 THEN 'POSTED'
+                      ELSE status
+                    END
+                  WHERE id = v_invoice_id;
+                END IF;
+
+                RETURN COALESCE(NEW, OLD);
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION update_invoice_paid_amount() IS
+              'Met à jour les montants payés et soldes dus des factures';
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 8: Audit automatique
+  # Enregistre les modifications dans audit_log
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-08-function-audit-log
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION log_audit_trail()
+              RETURNS TRIGGER AS $$
+              DECLARE
+                v_old_values JSONB;
+                v_new_values JSONB;
+                v_action VARCHAR(20);
+              BEGIN
+                -- Déterminer l'action
+                IF TG_OP = 'INSERT' THEN
+                  v_action = 'INSERT';
+                  v_new_values = to_jsonb(NEW);
+                  v_old_values = NULL;
+                ELSIF TG_OP = 'UPDATE' THEN
+                  v_action = 'UPDATE';
+                  v_old_values = to_jsonb(OLD);
+                  v_new_values = to_jsonb(NEW);
+                ELSIF TG_OP = 'DELETE' THEN
+                  v_action = 'DELETE';
+                  v_old_values = to_jsonb(OLD);
+                  v_new_values = NULL;
+                END IF;
+
+                -- Insérer dans audit_log
+                INSERT INTO audit_log (
+                  user_id,
+                  company_id,
+                  table_name,
+                  record_id,
+                  action,
+                  old_values,
+                  new_values
+                ) VALUES (
+                  COALESCE(NEW.updated_by, OLD.updated_by, NEW.created_by, OLD.created_by),
+                  COALESCE(NEW.company_id, OLD.company_id),
+                  TG_TABLE_NAME,
+                  COALESCE(NEW.id, OLD.id),
+                  v_action,
+                  v_old_values,
+                  v_new_values
+                );
+
+                RETURN COALESCE(NEW, OLD);
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION log_audit_trail() IS
+              'Enregistre automatiquement les modifications dans audit_log';
+
+  # -----------------------------------------------------------------------------
+  # TRIGGERS: Application des fonctions aux tables
+  # -----------------------------------------------------------------------------
+
+  # Triggers updated_at sur toutes les tables
+  - changeSet:
+      id: 004-09-triggers-updated-at
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- company
+              CREATE TRIGGER trg_company_updated_at
+              BEFORE UPDATE ON company
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- fiscal_year
+              CREATE TRIGGER trg_fiscal_year_updated_at
+              BEFORE UPDATE ON fiscal_year
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- currency
+              CREATE TRIGGER trg_currency_updated_at
+              BEFORE UPDATE ON currency
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- exchange_rate
+              CREATE TRIGGER trg_exchange_rate_updated_at
+              BEFORE UPDATE ON exchange_rate
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- chart_of_accounts
+              CREATE TRIGGER trg_chart_of_accounts_updated_at
+              BEFORE UPDATE ON chart_of_accounts
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- account
+              CREATE TRIGGER trg_account_updated_at
+              BEFORE UPDATE ON account
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- journal
+              CREATE TRIGGER trg_journal_updated_at
+              BEFORE UPDATE ON journal
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- tax_code
+              CREATE TRIGGER trg_tax_code_updated_at
+              BEFORE UPDATE ON tax_code
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- user_account
+              CREATE TRIGGER trg_user_account_updated_at
+              BEFORE UPDATE ON user_account
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- gl_transaction
+              CREATE TRIGGER trg_gl_transaction_updated_at
+              BEFORE UPDATE ON gl_transaction
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- gl_transaction_line
+              CREATE TRIGGER trg_gl_transaction_line_updated_at
+              BEFORE UPDATE ON gl_transaction_line
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- gl_balance
+              CREATE TRIGGER trg_gl_balance_updated_at
+              BEFORE UPDATE ON gl_balance
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- business_partner
+              CREATE TRIGGER trg_business_partner_updated_at
+              BEFORE UPDATE ON business_partner
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- business_partner_address
+              CREATE TRIGGER trg_bp_address_updated_at
+              BEFORE UPDATE ON business_partner_address
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- product
+              CREATE TRIGGER trg_product_updated_at
+              BEFORE UPDATE ON product
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- warehouse
+              CREATE TRIGGER trg_warehouse_updated_at
+              BEFORE UPDATE ON warehouse
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- stock_location
+              CREATE TRIGGER trg_stock_location_updated_at
+              BEFORE UPDATE ON stock_location
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- sales_invoice
+              CREATE TRIGGER trg_sales_invoice_updated_at
+              BEFORE UPDATE ON sales_invoice
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- sales_invoice_line
+              CREATE TRIGGER trg_sales_invoice_line_updated_at
+              BEFORE UPDATE ON sales_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- purchase_invoice
+              CREATE TRIGGER trg_purchase_invoice_updated_at
+              BEFORE UPDATE ON purchase_invoice
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- purchase_invoice_line
+              CREATE TRIGGER trg_purchase_invoice_line_updated_at
+              BEFORE UPDATE ON purchase_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+              -- payment
+              CREATE TRIGGER trg_payment_updated_at
+              BEFORE UPDATE ON payment
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+  # Triggers GL balance
+  - changeSet:
+      id: 004-10-triggers-gl-balance
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Recalculer l'équilibre après INSERT/UPDATE/DELETE de lignes GL
+              CREATE TRIGGER trg_gl_line_balance_after_insert
+              AFTER INSERT ON gl_transaction_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_gl_transaction_balance();
+
+              CREATE TRIGGER trg_gl_line_balance_after_update
+              AFTER UPDATE ON gl_transaction_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_gl_transaction_balance();
+
+              CREATE TRIGGER trg_gl_line_balance_after_delete
+              AFTER DELETE ON gl_transaction_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_gl_transaction_balance();
+
+              -- Valider équilibre avant validation
+              CREATE TRIGGER trg_gl_transaction_validate
+              BEFORE UPDATE ON gl_transaction
+              FOR EACH ROW EXECUTE FUNCTION validate_gl_transaction_before_post();
+
+  # Triggers factures
+  - changeSet:
+      id: 004-11-triggers-invoices
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Calculer montants ligne BEFORE INSERT/UPDATE
+              CREATE TRIGGER trg_sales_line_calculate_before
+              BEFORE INSERT OR UPDATE ON sales_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_invoice_line_amounts();
+
+              CREATE TRIGGER trg_purchase_line_calculate_before
+              BEFORE INSERT OR UPDATE ON purchase_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_invoice_line_amounts();
+
+              -- Recalculer totaux facture AFTER INSERT/UPDATE/DELETE lignes
+              CREATE TRIGGER trg_sales_line_totals_after_insert
+              AFTER INSERT ON sales_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_invoice_totals();
+
+              CREATE TRIGGER trg_sales_line_totals_after_update
+              AFTER UPDATE ON sales_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_invoice_totals();
+
+              CREATE TRIGGER trg_sales_line_totals_after_delete
+              AFTER DELETE ON sales_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_invoice_totals();
+
+              CREATE TRIGGER trg_purchase_line_totals_after_insert
+              AFTER INSERT ON purchase_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_invoice_totals();
+
+              CREATE TRIGGER trg_purchase_line_totals_after_update
+              AFTER UPDATE ON purchase_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_invoice_totals();
+
+              CREATE TRIGGER trg_purchase_line_totals_after_delete
+              AFTER DELETE ON purchase_invoice_line
+              FOR EACH ROW EXECUTE FUNCTION calculate_invoice_totals();
+
+  # Triggers paiements
+  - changeSet:
+      id: 004-12-triggers-payments
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Mettre à jour affectation paiement
+              CREATE TRIGGER trg_payment_allocation_after_insert
+              AFTER INSERT ON payment_allocation
+              FOR EACH ROW EXECUTE FUNCTION update_payment_allocation();
+
+              CREATE TRIGGER trg_payment_allocation_after_update
+              AFTER UPDATE ON payment_allocation
+              FOR EACH ROW EXECUTE FUNCTION update_payment_allocation();
+
+              CREATE TRIGGER trg_payment_allocation_after_delete
+              AFTER DELETE ON payment_allocation
+              FOR EACH ROW EXECUTE FUNCTION update_payment_allocation();
+
+              -- Mettre à jour montants payés factures
+              CREATE TRIGGER trg_payment_allocation_invoice_after_insert
+              AFTER INSERT ON payment_allocation
+              FOR EACH ROW EXECUTE FUNCTION update_invoice_paid_amount();
+
+              CREATE TRIGGER trg_payment_allocation_invoice_after_update
+              AFTER UPDATE ON payment_allocation
+              FOR EACH ROW EXECUTE FUNCTION update_invoice_paid_amount();
+
+              CREATE TRIGGER trg_payment_allocation_invoice_after_delete
+              AFTER DELETE ON payment_allocation
+              FOR EACH ROW EXECUTE FUNCTION update_invoice_paid_amount();
+
+  # -----------------------------------------------------------------------------
+  # FONCTION 9: Empêcher modification écritures validées
+  # Sécurité : interdire UPDATE/DELETE sur gl_transaction POSTED/VALIDATED
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 004-13-function-prevent-gl-modification
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION prevent_posted_gl_modification()
+              RETURNS TRIGGER AS $$
+              BEGIN
+                IF TG_OP = 'UPDATE' THEN
+                  IF OLD.status IN ('POSTED', 'VALIDATED') AND NEW.status = OLD.status THEN
+                    RAISE EXCEPTION 'Cannot modify posted or validated transaction. Please reverse it instead.';
+                  END IF;
+                ELSIF TG_OP = 'DELETE' THEN
+                  IF OLD.status IN ('POSTED', 'VALIDATED') THEN
+                    RAISE EXCEPTION 'Cannot delete posted or validated transaction. Please cancel or reverse it.';
+                  END IF;
+                END IF;
+
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;
+
+              COMMENT ON FUNCTION prevent_posted_gl_modification() IS
+              'Empêche la modification/suppression d''écritures comptables validées';
+
+              CREATE TRIGGER trg_gl_transaction_prevent_modification
+              BEFORE UPDATE OR DELETE ON gl_transaction
+              FOR EACH ROW EXECUTE FUNCTION prevent_posted_gl_modification();

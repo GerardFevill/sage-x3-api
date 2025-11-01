@@ -1,0 +1,709 @@
+databaseChangeLog:
+  # =============================================================================
+  # 002 - GENERAL LEDGER (Comptabilité Générale)
+  # =============================================================================
+  # Tables pour la comptabilité en partie double :
+  # - gl_transaction : En-têtes des écritures comptables
+  # - gl_transaction_line : Lignes d'écritures (débits/crédits)
+  # - gl_balance : Soldes comptables par période
+  # - gl_reconciliation : Lettrage des comptes
+  #
+  # Règles métier critiques :
+  # - Partie double : Σ débit = Σ crédit par transaction
+  # - Multi-société, multi-exercice, multi-devise
+  # - Traçabilité complète des documents sources
+  # - Statuts de validation (DRAFT, POSTED, VALIDATED, CANCELLED)
+  # =============================================================================
+
+  # -----------------------------------------------------------------------------
+  # 1. TABLE: gl_transaction (En-têtes d'écritures comptables)
+  # Pièces comptables avec métadonnées et contrôle de validation
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 002-01-create-gl-transaction
+      author: architect
+      changes:
+        - createTable:
+            tableName: gl_transaction
+            remarks: "En-têtes des écritures comptables (pièces)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fiscal_year_id
+                  type: BIGINT
+                  remarks: "Exercice comptable"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: journal_id
+                  type: BIGINT
+                  remarks: "Journal d'imputation"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: transaction_number
+                  type: VARCHAR(50)
+                  remarks: "Numéro de pièce unique (ex: VTE-2024-00001)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: transaction_date
+                  type: DATE
+                  remarks: "Date comptable"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: posting_date
+                  type: DATE
+                  remarks: "Date de comptabilisation effective"
+              - column:
+                  name: document_date
+                  type: DATE
+                  remarks: "Date du document source (facture, etc.)"
+              - column:
+                  name: description
+                  type: TEXT
+                  remarks: "Libellé de l'écriture"
+              - column:
+                  name: reference
+                  type: VARCHAR(100)
+                  remarks: "Référence externe (n° facture, etc.)"
+              - column:
+                  name: source_type
+                  type: VARCHAR(50)
+                  remarks: "Type de document source (INVOICE, PAYMENT, JOURNAL_ENTRY, etc.)"
+              - column:
+                  name: source_id
+                  type: BIGINT
+                  remarks: "ID du document source"
+              - column:
+                  name: currency_id
+                  type: BIGINT
+                  remarks: "Devise de la transaction"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: exchange_rate
+                  type: NUMERIC(20, 10)
+                  remarks: "Taux de change appliqué"
+                  defaultValueNumeric: 1.0
+              - column:
+                  name: total_debit
+                  type: NUMERIC(20, 4)
+                  remarks: "Total débit (calculé)"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_credit
+                  type: NUMERIC(20, 4)
+                  remarks: "Total crédit (calculé)"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: balance_check
+                  type: NUMERIC(20, 4)
+                  remarks: "Vérification équilibre (doit être 0)"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  remarks: "Statut: DRAFT, POSTED, VALIDATED, CANCELLED"
+                  defaultValue: "DRAFT"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: validated_at
+                  type: TIMESTAMPTZ
+                  remarks: "Date de validation"
+              - column:
+                  name: validated_by
+                  type: BIGINT
+                  remarks: "Utilisateur validateur"
+              - column:
+                  name: cancelled_at
+                  type: TIMESTAMPTZ
+                  remarks: "Date d'annulation"
+              - column:
+                  name: cancelled_by
+                  type: BIGINT
+                  remarks: "Utilisateur annulateur"
+              - column:
+                  name: cancellation_reason
+                  type: TEXT
+                  remarks: "Motif d'annulation"
+              - column:
+                  name: is_reversed
+                  type: BOOLEAN
+                  remarks: "Écriture contrepassée"
+                  defaultValueBoolean: false
+              - column:
+                  name: reversed_by_id
+                  type: BIGINT
+                  remarks: "ID de l'écriture de contrepassation"
+              - column:
+                  name: reverses_id
+                  type: BIGINT
+                  remarks: "ID de l'écriture contrepassée"
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: company_id
+            constraintName: fk_gl_transaction_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: fiscal_year_id
+            constraintName: fk_gl_transaction_fiscal_year
+            referencedTableName: fiscal_year
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: journal_id
+            constraintName: fk_gl_transaction_journal
+            referencedTableName: journal
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: currency_id
+            constraintName: fk_gl_transaction_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: validated_by
+            constraintName: fk_gl_transaction_validated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: cancelled_by
+            constraintName: fk_gl_transaction_cancelled_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: reversed_by_id
+            constraintName: fk_gl_transaction_reversed_by
+            referencedTableName: gl_transaction
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: reverses_id
+            constraintName: fk_gl_transaction_reverses
+            referencedTableName: gl_transaction
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: created_by
+            constraintName: fk_gl_transaction_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction
+            baseColumnNames: updated_by
+            constraintName: fk_gl_transaction_updated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: gl_transaction
+            columnNames: company_id, transaction_number
+            constraintName: uk_gl_transaction_company_number
+
+        - addCheckConstraint:
+            tableName: gl_transaction
+            constraintName: chk_gl_transaction_status
+            checkConstraint: "status IN ('DRAFT', 'POSTED', 'VALIDATED', 'CANCELLED')"
+
+        # CONTRAINTE CRITIQUE : Équilibre débit = crédit
+        - addCheckConstraint:
+            tableName: gl_transaction
+            constraintName: chk_gl_transaction_balance
+            checkConstraint: "status = 'DRAFT' OR balance_check = 0"
+
+  # -----------------------------------------------------------------------------
+  # 2. TABLE: gl_transaction_line (Lignes d'écritures comptables)
+  # Détail des mouvements débit/crédit par compte
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 002-02-create-gl-transaction-line
+      author: architect
+      changes:
+        - createTable:
+            tableName: gl_transaction_line
+            remarks: "Lignes d'écritures comptables (débits/crédits par compte)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: gl_transaction_id
+                  type: BIGINT
+                  remarks: "En-tête de la pièce"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: line_number
+                  type: INTEGER
+                  remarks: "Numéro de ligne dans la pièce"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: BIGINT
+                  remarks: "Compte d'imputation"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+                  remarks: "Libellé de la ligne"
+              - column:
+                  name: debit_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant débit (devise transaction)"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: credit_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant crédit (devise transaction)"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: debit_base_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant débit (devise société)"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: credit_base_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant crédit (devise société)"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: third_party_type
+                  type: VARCHAR(20)
+                  remarks: "Type tiers: CUSTOMER, SUPPLIER, EMPLOYEE, OTHER"
+              - column:
+                  name: third_party_id
+                  type: BIGINT
+                  remarks: "ID du tiers (client/fournisseur)"
+              - column:
+                  name: tax_code_id
+                  type: BIGINT
+                  remarks: "Code TVA appliqué"
+              - column:
+                  name: tax_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant de taxe"
+                  defaultValueNumeric: 0
+              - column:
+                  name: cost_center_id
+                  type: BIGINT
+                  remarks: "Centre de coût (analytique) - TODO Phase future"
+              - column:
+                  name: project_id
+                  type: BIGINT
+                  remarks: "Projet (analytique) - TODO Phase future"
+              - column:
+                  name: due_date
+                  type: DATE
+                  remarks: "Date d'échéance (pour tiers)"
+              - column:
+                  name: reconciliation_id
+                  type: BIGINT
+                  remarks: "ID du lettrage"
+              - column:
+                  name: is_reconciled
+                  type: BOOLEAN
+                  remarks: "Ligne lettrée"
+                  defaultValueBoolean: false
+              - column:
+                  name: reconciled_at
+                  type: TIMESTAMPTZ
+                  remarks: "Date de lettrage"
+              - column:
+                  name: reference
+                  type: VARCHAR(100)
+                  remarks: "Référence complémentaire"
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction_line
+            baseColumnNames: gl_transaction_id
+            constraintName: fk_gl_line_transaction
+            referencedTableName: gl_transaction
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction_line
+            baseColumnNames: account_id
+            constraintName: fk_gl_line_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction_line
+            baseColumnNames: tax_code_id
+            constraintName: fk_gl_line_tax_code
+            referencedTableName: tax_code
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: gl_transaction_line
+            columnNames: gl_transaction_id, line_number
+            constraintName: uk_gl_line_transaction_line_number
+
+        # CONTRAINTE : Une ligne ne peut avoir QUE débit OU crédit (pas les deux)
+        - addCheckConstraint:
+            tableName: gl_transaction_line
+            constraintName: chk_gl_line_debit_or_credit
+            checkConstraint: "(debit_amount = 0 OR credit_amount = 0) AND (debit_amount <> 0 OR credit_amount <> 0)"
+
+        # CONTRAINTE : Montants positifs
+        - addCheckConstraint:
+            tableName: gl_transaction_line
+            constraintName: chk_gl_line_amounts_positive
+            checkConstraint: "debit_amount >= 0 AND credit_amount >= 0 AND debit_base_amount >= 0 AND credit_base_amount >= 0"
+
+        - addCheckConstraint:
+            tableName: gl_transaction_line
+            constraintName: chk_gl_line_third_party_type
+            checkConstraint: "third_party_type IS NULL OR third_party_type IN ('CUSTOMER', 'SUPPLIER', 'EMPLOYEE', 'OTHER')"
+
+  # -----------------------------------------------------------------------------
+  # 3. TABLE: gl_balance (Soldes comptables)
+  # Table d'agrégation des soldes par compte/période (pour performance)
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 002-03-create-gl-balance
+      author: architect
+      changes:
+        - createTable:
+            tableName: gl_balance
+            remarks: "Soldes comptables par compte/période (table d'agrégation)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fiscal_year_id
+                  type: BIGINT
+                  remarks: "Exercice comptable"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: BIGINT
+                  remarks: "Compte"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: period_year
+                  type: INTEGER
+                  remarks: "Année de la période"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: period_month
+                  type: INTEGER
+                  remarks: "Mois de la période (1-12)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: opening_balance_debit
+                  type: NUMERIC(20, 4)
+                  remarks: "Solde d'ouverture débiteur"
+                  defaultValueNumeric: 0
+              - column:
+                  name: opening_balance_credit
+                  type: NUMERIC(20, 4)
+                  remarks: "Solde d'ouverture créditeur"
+                  defaultValueNumeric: 0
+              - column:
+                  name: period_debit
+                  type: NUMERIC(20, 4)
+                  remarks: "Total débits de la période"
+                  defaultValueNumeric: 0
+              - column:
+                  name: period_credit
+                  type: NUMERIC(20, 4)
+                  remarks: "Total crédits de la période"
+                  defaultValueNumeric: 0
+              - column:
+                  name: closing_balance_debit
+                  type: NUMERIC(20, 4)
+                  remarks: "Solde de clôture débiteur"
+                  defaultValueNumeric: 0
+              - column:
+                  name: closing_balance_credit
+                  type: NUMERIC(20, 4)
+                  remarks: "Solde de clôture créditeur"
+                  defaultValueNumeric: 0
+              - column:
+                  name: currency_id
+                  type: BIGINT
+                  remarks: "Devise de tenue de compte"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_balance
+            baseColumnNames: company_id
+            constraintName: fk_gl_balance_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_balance
+            baseColumnNames: fiscal_year_id
+            constraintName: fk_gl_balance_fiscal_year
+            referencedTableName: fiscal_year
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_balance
+            baseColumnNames: account_id
+            constraintName: fk_gl_balance_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_balance
+            baseColumnNames: currency_id
+            constraintName: fk_gl_balance_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addUniqueConstraint:
+            tableName: gl_balance
+            columnNames: company_id, fiscal_year_id, account_id, period_year, period_month
+            constraintName: uk_gl_balance_unique
+
+        - addCheckConstraint:
+            tableName: gl_balance
+            constraintName: chk_gl_balance_month
+            checkConstraint: "period_month >= 1 AND period_month <= 12"
+
+  # -----------------------------------------------------------------------------
+  # 4. TABLE: gl_reconciliation (Lettrage)
+  # Groupe de lignes lettrées ensemble (créances/dettes soldées)
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 002-04-create-gl-reconciliation
+      author: architect
+      changes:
+        - createTable:
+            tableName: gl_reconciliation
+            remarks: "Lettrages comptables (regroupement de lignes)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: BIGINT
+                  remarks: "Compte lettré"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reconciliation_code
+                  type: VARCHAR(20)
+                  remarks: "Code de lettrage (ex: AA, AB, AC, etc.)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reconciliation_date
+                  type: DATE
+                  remarks: "Date de lettrage"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_debit
+                  type: NUMERIC(20, 4)
+                  remarks: "Total débits lettrés"
+                  defaultValueNumeric: 0
+              - column:
+                  name: total_credit
+                  type: NUMERIC(20, 4)
+                  remarks: "Total crédits lettrés"
+                  defaultValueNumeric: 0
+              - column:
+                  name: balance
+                  type: NUMERIC(20, 4)
+                  remarks: "Solde du lettrage (doit être 0)"
+                  defaultValueNumeric: 0
+              - column:
+                  name: is_automatic
+                  type: BOOLEAN
+                  remarks: "Lettrage automatique ou manuel"
+                  defaultValueBoolean: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_reconciliation
+            baseColumnNames: company_id
+            constraintName: fk_gl_reconciliation_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_reconciliation
+            baseColumnNames: account_id
+            constraintName: fk_gl_reconciliation_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: gl_reconciliation
+            baseColumnNames: created_by
+            constraintName: fk_gl_reconciliation_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: gl_reconciliation
+            columnNames: company_id, account_id, reconciliation_code
+            constraintName: uk_gl_reconciliation_code
+
+        # CONTRAINTE : Lettrage équilibré (peut accepter petit écart pour arrondis)
+        - addCheckConstraint:
+            tableName: gl_reconciliation
+            constraintName: chk_gl_reconciliation_balance
+            checkConstraint: "ABS(balance) < 0.01"
+
+  # -----------------------------------------------------------------------------
+  # 5. Ajouter FK pour reconciliation_id dans gl_transaction_line
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 002-05-add-reconciliation-fk
+      author: architect
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: gl_transaction_line
+            baseColumnNames: reconciliation_id
+            constraintName: fk_gl_line_reconciliation
+            referencedTableName: gl_reconciliation
+            referencedColumnNames: id
+            onDelete: SET NULL

@@ -1,0 +1,29 @@
+# Database
+*.sql.backup
+*.dump
+
+# Liquibase
+liquibase.properties
+*-changelog.*.sql
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# SQL generated files
+sql/full-schema.sql
+sql/generated-*.sql

@@ -1,0 +1,1038 @@
+databaseChangeLog:
+  # =============================================================================
+  # 001 - FOUNDATION TABLES
+  # =============================================================================
+  # Tables fondamentales du système ERP :
+  # - Sociétés (multi-société)
+  # - Exercices comptables (multi-exercice)
+  # - Devises et taux de change
+  # - Plans comptables et comptes
+  # - Journaux comptables
+  # - Codes TVA
+  # - Utilisateurs et sécurité
+  # - Audit logs
+  # =============================================================================
+
+  # -----------------------------------------------------------------------------
+  # 1. TABLE: company (Sociétés)
+  # Gère le multi-société, pierre angulaire de l'ERP
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-01-create-company
+      author: architect
+      changes:
+        - createTable:
+            tableName: company
+            remarks: "Table des sociétés - Support multi-société"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(10)
+                  remarks: "Code unique de la société (ex: FR01, US01)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Raison sociale"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: legal_name
+                  type: VARCHAR(200)
+                  remarks: "Dénomination légale complète"
+              - column:
+                  name: tax_id
+                  type: VARCHAR(50)
+                  remarks: "Numéro d'identification fiscale (SIRET, VAT, etc.)"
+              - column:
+                  name: registration_number
+                  type: VARCHAR(50)
+                  remarks: "Numéro d'immatriculation (RCS, etc.)"
+              - column:
+                  name: address_line1
+                  type: VARCHAR(200)
+              - column:
+                  name: address_line2
+                  type: VARCHAR(200)
+              - column:
+                  name: city
+                  type: VARCHAR(100)
+              - column:
+                  name: state_province
+                  type: VARCHAR(100)
+              - column:
+                  name: postal_code
+                  type: VARCHAR(20)
+              - column:
+                  name: country_code
+                  type: VARCHAR(2)
+                  remarks: "Code pays ISO 3166-1 alpha-2"
+              - column:
+                  name: default_currency_id
+                  type: BIGINT
+                  remarks: "Devise par défaut de la société"
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addUniqueConstraint:
+            tableName: company
+            columnNames: code
+            constraintName: uk_company_code
+
+  # -----------------------------------------------------------------------------
+  # 2. TABLE: currency (Devises)
+  # Support multi-devise avec codes ISO
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-02-create-currency
+      author: architect
+      changes:
+        - createTable:
+            tableName: currency
+            remarks: "Table des devises - Support multi-devise"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(3)
+                  remarks: "Code devise ISO 4217 (EUR, USD, GBP, etc.)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Nom de la devise"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: symbol
+                  type: VARCHAR(10)
+                  remarks: "Symbole (€, $, £, etc.)"
+              - column:
+                  name: decimal_places
+                  type: INTEGER
+                  defaultValueNumeric: 2
+                  remarks: "Nombre de décimales (généralement 2)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addUniqueConstraint:
+            tableName: currency
+            columnNames: code
+            constraintName: uk_currency_code
+
+  # -----------------------------------------------------------------------------
+  # 3. TABLE: exchange_rate (Taux de change)
+  # Historique des taux de change pour conversion multi-devise
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-03-create-exchange-rate
+      author: architect
+      changes:
+        - createTable:
+            tableName: exchange_rate
+            remarks: "Taux de change historiques entre devises"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: from_currency_id
+                  type: BIGINT
+                  remarks: "Devise source"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: to_currency_id
+                  type: BIGINT
+                  remarks: "Devise cible"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rate_date
+                  type: DATE
+                  remarks: "Date d'application du taux"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rate
+                  type: NUMERIC(20, 10)
+                  remarks: "Taux de change (ex: 1 USD = 0.92 EUR)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rate_type
+                  type: VARCHAR(20)
+                  remarks: "Type de taux (OFFICIAL, CUSTOM, BUDGET, etc.)"
+                  defaultValue: "OFFICIAL"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: exchange_rate
+            baseColumnNames: from_currency_id
+            constraintName: fk_exchange_rate_from_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: exchange_rate
+            baseColumnNames: to_currency_id
+            constraintName: fk_exchange_rate_to_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addUniqueConstraint:
+            tableName: exchange_rate
+            columnNames: from_currency_id, to_currency_id, rate_date, rate_type
+            constraintName: uk_exchange_rate_unique
+
+  # -----------------------------------------------------------------------------
+  # 4. TABLE: fiscal_year (Exercices comptables)
+  # Support multi-exercice par société
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-04-create-fiscal-year
+      author: architect
+      changes:
+        - createTable:
+            tableName: fiscal_year
+            remarks: "Exercices comptables par société"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(10)
+                  remarks: "Code exercice (ex: 2024, FY24)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Libellé de l'exercice"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: start_date
+                  type: DATE
+                  remarks: "Date de début d'exercice"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: end_date
+                  type: DATE
+                  remarks: "Date de fin d'exercice"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  remarks: "Statut: OPEN, CLOSED, LOCKED"
+                  defaultValue: "OPEN"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: fiscal_year
+            baseColumnNames: company_id
+            constraintName: fk_fiscal_year_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addUniqueConstraint:
+            tableName: fiscal_year
+            columnNames: company_id, code
+            constraintName: uk_fiscal_year_company_code
+
+        - addCheckConstraint:
+            tableName: fiscal_year
+            constraintName: chk_fiscal_year_dates
+            checkConstraint: "end_date > start_date"
+
+        - addCheckConstraint:
+            tableName: fiscal_year
+            constraintName: chk_fiscal_year_status
+            checkConstraint: "status IN ('OPEN', 'CLOSED', 'LOCKED')"
+
+  # -----------------------------------------------------------------------------
+  # 5. TABLE: chart_of_accounts (Plans comptables - Templates)
+  # Templates de plans comptables réutilisables
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-05-create-chart-of-accounts
+      author: architect
+      changes:
+        - createTable:
+            tableName: chart_of_accounts
+            remarks: "Plans comptables templates (PCG, IFRS, etc.)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(20)
+                  remarks: "Code du plan (PCG_FR, IFRS, GAAP_US, etc.)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Nom du plan comptable"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: country_code
+                  type: VARCHAR(2)
+                  remarks: "Pays d'origine du plan"
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addUniqueConstraint:
+            tableName: chart_of_accounts
+            columnNames: code
+            constraintName: uk_chart_of_accounts_code
+
+  # -----------------------------------------------------------------------------
+  # 6. TABLE: account (Comptes comptables)
+  # Instances de comptes par société, basées sur un plan comptable
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-06-create-account
+      author: architect
+      changes:
+        - createTable:
+            tableName: account
+            remarks: "Comptes comptables par société"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: chart_of_accounts_id
+                  type: BIGINT
+                  remarks: "Plan comptable de référence"
+              - column:
+                  name: account_number
+                  type: VARCHAR(20)
+                  remarks: "Numéro de compte (ex: 401000, 512000)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+                  remarks: "Libellé du compte"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_type
+                  type: VARCHAR(30)
+                  remarks: "Type: ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_category
+                  type: VARCHAR(50)
+                  remarks: "Catégorie détaillée (CURRENT_ASSET, FIXED_ASSET, etc.)"
+              - column:
+                  name: parent_account_id
+                  type: BIGINT
+                  remarks: "Compte parent pour hiérarchie"
+              - column:
+                  name: level
+                  type: INTEGER
+                  remarks: "Niveau hiérarchique (1, 2, 3, etc.)"
+                  defaultValueNumeric: 1
+              - column:
+                  name: is_header
+                  type: BOOLEAN
+                  remarks: "Compte collectif (non lettrable)"
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: allow_posting
+                  type: BOOLEAN
+                  remarks: "Autorise la saisie directe"
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: require_third_party
+                  type: BOOLEAN
+                  remarks: "Exige un tiers (clients/fournisseurs)"
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: require_analytical
+                  type: BOOLEAN
+                  remarks: "Exige ventilation analytique"
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reconcilable
+                  type: BOOLEAN
+                  remarks: "Compte lettrable"
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: currency_id
+                  type: BIGINT
+                  remarks: "Devise du compte (si mono-devise)"
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: account
+            baseColumnNames: company_id
+            constraintName: fk_account_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: account
+            baseColumnNames: chart_of_accounts_id
+            constraintName: fk_account_chart
+            referencedTableName: chart_of_accounts
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: account
+            baseColumnNames: parent_account_id
+            constraintName: fk_account_parent
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: account
+            baseColumnNames: currency_id
+            constraintName: fk_account_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addUniqueConstraint:
+            tableName: account
+            columnNames: company_id, account_number
+            constraintName: uk_account_company_number
+
+        - addCheckConstraint:
+            tableName: account
+            constraintName: chk_account_type
+            checkConstraint: "account_type IN ('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE')"
+
+  # -----------------------------------------------------------------------------
+  # 7. TABLE: journal (Journaux comptables)
+  # Journaux de saisie par société (ventes, achats, banque, OD, etc.)
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-07-create-journal
+      author: architect
+      changes:
+        - createTable:
+            tableName: journal
+            remarks: "Journaux comptables par société"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(10)
+                  remarks: "Code journal (VTE, ACH, BQ, OD, etc.)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Libellé du journal"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: journal_type
+                  type: VARCHAR(30)
+                  remarks: "Type: SALES, PURCHASE, BANK, CASH, GENERAL, etc."
+                  constraints:
+                    nullable: false
+              - column:
+                  name: default_account_id
+                  type: BIGINT
+                  remarks: "Compte de contrepartie par défaut"
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: journal
+            baseColumnNames: company_id
+            constraintName: fk_journal_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: journal
+            baseColumnNames: default_account_id
+            constraintName: fk_journal_default_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: journal
+            columnNames: company_id, code
+            constraintName: uk_journal_company_code
+
+        - addCheckConstraint:
+            tableName: journal
+            constraintName: chk_journal_type
+            checkConstraint: "journal_type IN ('SALES', 'PURCHASE', 'BANK', 'CASH', 'GENERAL', 'PAYROLL', 'OPENING', 'CLOSING')"
+
+  # -----------------------------------------------------------------------------
+  # 8. TABLE: tax_code (Codes TVA)
+  # Codes de taxe avec taux et comptes d'imputation
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-08-create-tax-code
+      author: architect
+      changes:
+        - createTable:
+            tableName: tax_code
+            remarks: "Codes de TVA et taxes"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(20)
+                  remarks: "Code taxe (TVA20, TVA10, VATEX, etc.)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Libellé de la taxe"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tax_type
+                  type: VARCHAR(30)
+                  remarks: "Type: VAT, SALES_TAX, EXCISE, NONE"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rate
+                  type: NUMERIC(10, 4)
+                  remarks: "Taux en % (ex: 20.00 pour 20%)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: direction
+                  type: VARCHAR(20)
+                  remarks: "Direction: INPUT (achats), OUTPUT (ventes)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tax_account_id
+                  type: BIGINT
+                  remarks: "Compte d'imputation de la taxe"
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: effective_from
+                  type: DATE
+                  remarks: "Date d'effet"
+              - column:
+                  name: effective_to
+                  type: DATE
+                  remarks: "Date de fin"
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: tax_code
+            baseColumnNames: company_id
+            constraintName: fk_tax_code_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: tax_code
+            baseColumnNames: tax_account_id
+            constraintName: fk_tax_code_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addUniqueConstraint:
+            tableName: tax_code
+            columnNames: company_id, code
+            constraintName: uk_tax_code_company_code
+
+        - addCheckConstraint:
+            tableName: tax_code
+            constraintName: chk_tax_code_type
+            checkConstraint: "tax_type IN ('VAT', 'SALES_TAX', 'EXCISE', 'WITHHOLDING', 'NONE')"
+
+        - addCheckConstraint:
+            tableName: tax_code
+            constraintName: chk_tax_code_direction
+            checkConstraint: "direction IN ('INPUT', 'OUTPUT')"
+
+        - addCheckConstraint:
+            tableName: tax_code
+            constraintName: chk_tax_code_rate
+            checkConstraint: "rate >= 0 AND rate <= 100"
+
+  # -----------------------------------------------------------------------------
+  # 9. TABLE: user_account (Utilisateurs)
+  # Gestion des utilisateurs du système
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-09-create-user-account
+      author: architect
+      changes:
+        - createTable:
+            tableName: user_account
+            remarks: "Comptes utilisateurs du système"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: username
+                  type: VARCHAR(50)
+                  remarks: "Nom d'utilisateur unique"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: email
+                  type: VARCHAR(255)
+                  remarks: "Email de l'utilisateur"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: password_hash
+                  type: VARCHAR(255)
+                  remarks: "Hash du mot de passe (bcrypt, argon2, etc.)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: first_name
+                  type: VARCHAR(100)
+              - column:
+                  name: last_name
+                  type: VARCHAR(100)
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_locked
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: failed_login_attempts
+                  type: INTEGER
+                  defaultValueNumeric: 0
+              - column:
+                  name: last_login_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: password_changed_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addUniqueConstraint:
+            tableName: user_account
+            columnNames: username
+            constraintName: uk_user_account_username
+
+        - addUniqueConstraint:
+            tableName: user_account
+            columnNames: email
+            constraintName: uk_user_account_email
+
+  # -----------------------------------------------------------------------------
+  # 10. TABLE: audit_log (Logs d'audit)
+  # Traçabilité complète des opérations
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-10-create-audit-log
+      author: architect
+      changes:
+        - createTable:
+            tableName: audit_log
+            remarks: "Journal d'audit de toutes les opérations"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  remarks: "Utilisateur ayant effectué l'action"
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société concernée"
+              - column:
+                  name: table_name
+                  type: VARCHAR(100)
+                  remarks: "Table modifiée"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: record_id
+                  type: BIGINT
+                  remarks: "ID de l'enregistrement modifié"
+              - column:
+                  name: action
+                  type: VARCHAR(20)
+                  remarks: "Action: INSERT, UPDATE, DELETE"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: old_values
+                  type: JSONB
+                  remarks: "Valeurs avant modification"
+              - column:
+                  name: new_values
+                  type: JSONB
+                  remarks: "Valeurs après modification"
+              - column:
+                  name: ip_address
+                  type: VARCHAR(45)
+                  remarks: "Adresse IP source"
+              - column:
+                  name: user_agent
+                  type: TEXT
+                  remarks: "User agent du client"
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: audit_log
+            baseColumnNames: user_id
+            constraintName: fk_audit_log_user
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: audit_log
+            baseColumnNames: company_id
+            constraintName: fk_audit_log_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addCheckConstraint:
+            tableName: audit_log
+            constraintName: chk_audit_log_action
+            checkConstraint: "action IN ('INSERT', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT')"
+
+  # -----------------------------------------------------------------------------
+  # 11. Ajouter les FK manquantes pour company
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 001-11-add-company-fk
+      author: architect
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: company
+            baseColumnNames: default_currency_id
+            constraintName: fk_company_default_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: company
+            baseColumnNames: created_by
+            constraintName: fk_company_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: company
+            baseColumnNames: updated_by
+            constraintName: fk_company_updated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL

@@ -1,0 +1,2016 @@
+databaseChangeLog:
+  # =============================================================================
+  # 003 - BUSINESS ENTITIES (Entités métier)
+  # =============================================================================
+  # Tables pour la gestion commerciale et les stocks :
+  # - business_partner : Tiers (clients/fournisseurs)
+  # - business_partner_address : Adresses des tiers
+  # - product : Articles/Produits
+  # - warehouse : Entrepôts/Dépôts
+  # - stock_location : Emplacements de stock
+  # - stock_movement : Mouvements de stock
+  # - sales_invoice : Factures clients
+  # - sales_invoice_line : Lignes de factures clients
+  # - purchase_invoice : Factures fournisseurs
+  # - purchase_invoice_line : Lignes de factures fournisseurs
+  # - payment : Règlements
+  # - payment_allocation : Affectation des règlements
+  #
+  # Principes :
+  # - Lien fort avec comptabilité (génération d'écritures GL)
+  # - Multi-société, multi-devise, multi-taxes
+  # - Workflow de validation (DRAFT → VALIDATED → POSTED)
+  # - Traçabilité complète
+  # =============================================================================
+
+  # -----------------------------------------------------------------------------
+  # 1. TABLE: business_partner (Tiers - Clients/Fournisseurs)
+  # Centralisation des tiers avec rôles multiples
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-01-create-business-partner
+      author: architect
+      changes:
+        - createTable:
+            tableName: business_partner
+            remarks: "Tiers (clients, fournisseurs, employés, etc.)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(20)
+                  remarks: "Code tiers unique"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+                  remarks: "Nom/Raison sociale"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: legal_name
+                  type: VARCHAR(200)
+                  remarks: "Dénomination légale"
+              - column:
+                  name: partner_type
+                  type: VARCHAR(20)
+                  remarks: "Type principal: CUSTOMER, SUPPLIER, EMPLOYEE, OTHER"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_customer
+                  type: BOOLEAN
+                  remarks: "Est client"
+                  defaultValueBoolean: false
+              - column:
+                  name: is_supplier
+                  type: BOOLEAN
+                  remarks: "Est fournisseur"
+                  defaultValueBoolean: false
+              - column:
+                  name: is_employee
+                  type: BOOLEAN
+                  remarks: "Est employé"
+                  defaultValueBoolean: false
+              - column:
+                  name: tax_id
+                  type: VARCHAR(50)
+                  remarks: "N° identification fiscale"
+              - column:
+                  name: registration_number
+                  type: VARCHAR(50)
+                  remarks: "N° SIRET/RCS"
+              - column:
+                  name: email
+                  type: VARCHAR(255)
+              - column:
+                  name: phone
+                  type: VARCHAR(50)
+              - column:
+                  name: website
+                  type: VARCHAR(255)
+              - column:
+                  name: customer_account_id
+                  type: BIGINT
+                  remarks: "Compte comptable client (411xxx)"
+              - column:
+                  name: supplier_account_id
+                  type: BIGINT
+                  remarks: "Compte comptable fournisseur (401xxx)"
+              - column:
+                  name: currency_id
+                  type: BIGINT
+                  remarks: "Devise par défaut"
+              - column:
+                  name: payment_terms_days
+                  type: INTEGER
+                  remarks: "Délai de paiement (jours)"
+                  defaultValueNumeric: 30
+              - column:
+                  name: credit_limit
+                  type: NUMERIC(20, 4)
+                  remarks: "Plafond d'encours"
+                  defaultValueNumeric: 0
+              - column:
+                  name: default_tax_code_id
+                  type: BIGINT
+                  remarks: "Code TVA par défaut"
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_blocked
+                  type: BOOLEAN
+                  remarks: "Tiers bloqué"
+                  defaultValueBoolean: false
+              - column:
+                  name: blocked_reason
+                  type: TEXT
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: business_partner
+            baseColumnNames: company_id
+            constraintName: fk_bp_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: business_partner
+            baseColumnNames: customer_account_id
+            constraintName: fk_bp_customer_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: business_partner
+            baseColumnNames: supplier_account_id
+            constraintName: fk_bp_supplier_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: business_partner
+            baseColumnNames: currency_id
+            constraintName: fk_bp_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: business_partner
+            baseColumnNames: default_tax_code_id
+            constraintName: fk_bp_tax_code
+            referencedTableName: tax_code
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: business_partner
+            baseColumnNames: created_by
+            constraintName: fk_bp_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: business_partner
+            baseColumnNames: updated_by
+            constraintName: fk_bp_updated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: business_partner
+            columnNames: company_id, code
+            constraintName: uk_bp_company_code
+
+        - addCheckConstraint:
+            tableName: business_partner
+            constraintName: chk_bp_partner_type
+            checkConstraint: "partner_type IN ('CUSTOMER', 'SUPPLIER', 'EMPLOYEE', 'OTHER')"
+
+  # -----------------------------------------------------------------------------
+  # 2. TABLE: business_partner_address (Adresses des tiers)
+  # Support multi-adresses (livraison, facturation, etc.)
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-02-create-business-partner-address
+      author: architect
+      changes:
+        - createTable:
+            tableName: business_partner_address
+            remarks: "Adresses des tiers (multi-adresses)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: business_partner_id
+                  type: BIGINT
+                  remarks: "Tiers propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: address_type
+                  type: VARCHAR(20)
+                  remarks: "Type: BILLING, SHIPPING, MAIN, OTHER"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Libellé de l'adresse"
+              - column:
+                  name: address_line1
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: address_line2
+                  type: VARCHAR(200)
+              - column:
+                  name: city
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: state_province
+                  type: VARCHAR(100)
+              - column:
+                  name: postal_code
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: country_code
+                  type: VARCHAR(2)
+                  remarks: "Code pays ISO 3166-1"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_default
+                  type: BOOLEAN
+                  remarks: "Adresse par défaut"
+                  defaultValueBoolean: false
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: business_partner_address
+            baseColumnNames: business_partner_id
+            constraintName: fk_bp_address_partner
+            referencedTableName: business_partner
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addCheckConstraint:
+            tableName: business_partner_address
+            constraintName: chk_bp_address_type
+            checkConstraint: "address_type IN ('BILLING', 'SHIPPING', 'MAIN', 'OTHER')"
+
+  # -----------------------------------------------------------------------------
+  # 3. TABLE: product (Articles/Produits)
+  # Catalogue produits avec gestion stock
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-03-create-product
+      author: architect
+      changes:
+        - createTable:
+            tableName: product
+            remarks: "Catalogue de produits/articles"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(50)
+                  remarks: "Référence article"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+                  remarks: "Désignation"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+                  remarks: "Description détaillée"
+              - column:
+                  name: product_type
+                  type: VARCHAR(20)
+                  remarks: "Type: GOODS, SERVICE, ASSET"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(100)
+                  remarks: "Catégorie produit"
+              - column:
+                  name: unit_of_measure
+                  type: VARCHAR(20)
+                  remarks: "Unité de mesure (PCE, KG, L, etc.)"
+                  defaultValue: "PCE"
+              - column:
+                  name: is_stockable
+                  type: BOOLEAN
+                  remarks: "Géré en stock"
+                  defaultValueBoolean: true
+              - column:
+                  name: is_purchasable
+                  type: BOOLEAN
+                  remarks: "Peut être acheté"
+                  defaultValueBoolean: true
+              - column:
+                  name: is_sellable
+                  type: BOOLEAN
+                  remarks: "Peut être vendu"
+                  defaultValueBoolean: true
+              - column:
+                  name: purchase_price
+                  type: NUMERIC(20, 4)
+                  remarks: "Prix d'achat"
+                  defaultValueNumeric: 0
+              - column:
+                  name: sale_price
+                  type: NUMERIC(20, 4)
+                  remarks: "Prix de vente"
+                  defaultValueNumeric: 0
+              - column:
+                  name: standard_cost
+                  type: NUMERIC(20, 4)
+                  remarks: "Coût standard"
+                  defaultValueNumeric: 0
+              - column:
+                  name: currency_id
+                  type: BIGINT
+                  remarks: "Devise des prix"
+              - column:
+                  name: purchase_account_id
+                  type: BIGINT
+                  remarks: "Compte d'achat (607xxx)"
+              - column:
+                  name: sales_account_id
+                  type: BIGINT
+                  remarks: "Compte de vente (707xxx)"
+              - column:
+                  name: stock_account_id
+                  type: BIGINT
+                  remarks: "Compte de stock (3xxx)"
+              - column:
+                  name: purchase_tax_code_id
+                  type: BIGINT
+                  remarks: "TVA achat par défaut"
+              - column:
+                  name: sales_tax_code_id
+                  type: BIGINT
+                  remarks: "TVA vente par défaut"
+              - column:
+                  name: weight
+                  type: NUMERIC(10, 3)
+                  remarks: "Poids (kg)"
+              - column:
+                  name: volume
+                  type: NUMERIC(10, 3)
+                  remarks: "Volume (m³)"
+              - column:
+                  name: barcode
+                  type: VARCHAR(50)
+                  remarks: "Code-barres EAN/UPC"
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: discontinued_date
+                  type: DATE
+                  remarks: "Date d'arrêt de commercialisation"
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: company_id
+            constraintName: fk_product_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: currency_id
+            constraintName: fk_product_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: purchase_account_id
+            constraintName: fk_product_purchase_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: sales_account_id
+            constraintName: fk_product_sales_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: stock_account_id
+            constraintName: fk_product_stock_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: purchase_tax_code_id
+            constraintName: fk_product_purchase_tax
+            referencedTableName: tax_code
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: sales_tax_code_id
+            constraintName: fk_product_sales_tax
+            referencedTableName: tax_code
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: created_by
+            constraintName: fk_product_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: updated_by
+            constraintName: fk_product_updated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: product
+            columnNames: company_id, code
+            constraintName: uk_product_company_code
+
+        - addCheckConstraint:
+            tableName: product
+            constraintName: chk_product_type
+            checkConstraint: "product_type IN ('GOODS', 'SERVICE', 'ASSET')"
+
+  # -----------------------------------------------------------------------------
+  # 4. TABLE: warehouse (Entrepôts/Dépôts)
+  # Lieux de stockage
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-04-create-warehouse
+      author: architect
+      changes:
+        - createTable:
+            tableName: warehouse
+            remarks: "Entrepôts/Dépôts de stockage"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société propriétaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(20)
+                  remarks: "Code entrepôt"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Nom de l'entrepôt"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: address_line1
+                  type: VARCHAR(200)
+              - column:
+                  name: address_line2
+                  type: VARCHAR(200)
+              - column:
+                  name: city
+                  type: VARCHAR(100)
+              - column:
+                  name: postal_code
+                  type: VARCHAR(20)
+              - column:
+                  name: country_code
+                  type: VARCHAR(2)
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: warehouse
+            baseColumnNames: company_id
+            constraintName: fk_warehouse_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: warehouse
+            baseColumnNames: created_by
+            constraintName: fk_warehouse_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: warehouse
+            baseColumnNames: updated_by
+            constraintName: fk_warehouse_updated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: warehouse
+            columnNames: company_id, code
+            constraintName: uk_warehouse_company_code
+
+  # -----------------------------------------------------------------------------
+  # 5. TABLE: stock_location (Emplacements de stock)
+  # Emplacements physiques dans les entrepôts
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-05-create-stock-location
+      author: architect
+      changes:
+        - createTable:
+            tableName: stock_location
+            remarks: "Emplacements de stock dans les entrepôts"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: warehouse_id
+                  type: BIGINT
+                  remarks: "Entrepôt parent"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(20)
+                  remarks: "Code emplacement (ex: A-01-01)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  remarks: "Nom de l'emplacement"
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: stock_location
+            baseColumnNames: warehouse_id
+            constraintName: fk_stock_location_warehouse
+            referencedTableName: warehouse
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addUniqueConstraint:
+            tableName: stock_location
+            columnNames: warehouse_id, code
+            constraintName: uk_stock_location_warehouse_code
+
+  # -----------------------------------------------------------------------------
+  # 6. TABLE: stock_movement (Mouvements de stock)
+  # Historique complet des mouvements
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-06-create-stock-movement
+      author: architect
+      changes:
+        - createTable:
+            tableName: stock_movement
+            remarks: "Mouvements de stock (entrées/sorties)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: product_id
+                  type: BIGINT
+                  remarks: "Article concerné"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: warehouse_id
+                  type: BIGINT
+                  remarks: "Entrepôt"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: location_id
+                  type: BIGINT
+                  remarks: "Emplacement"
+              - column:
+                  name: movement_date
+                  type: DATE
+                  remarks: "Date du mouvement"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: movement_type
+                  type: VARCHAR(30)
+                  remarks: "Type: IN (entrée), OUT (sortie), ADJUSTMENT, TRANSFER"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: quantity
+                  type: NUMERIC(15, 4)
+                  remarks: "Quantité (signée: + entrée, - sortie)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: unit_cost
+                  type: NUMERIC(20, 4)
+                  remarks: "Coût unitaire"
+                  defaultValueNumeric: 0
+              - column:
+                  name: total_cost
+                  type: NUMERIC(20, 4)
+                  remarks: "Coût total (quantity * unit_cost)"
+                  defaultValueNumeric: 0
+              - column:
+                  name: reference
+                  type: VARCHAR(100)
+                  remarks: "Référence document source"
+              - column:
+                  name: source_type
+                  type: VARCHAR(50)
+                  remarks: "Type source: PURCHASE, SALE, INVENTORY, TRANSFER"
+              - column:
+                  name: source_id
+                  type: BIGINT
+                  remarks: "ID du document source"
+              - column:
+                  name: gl_transaction_id
+                  type: BIGINT
+                  remarks: "Écriture comptable associée"
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: stock_movement
+            baseColumnNames: company_id
+            constraintName: fk_stock_movement_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: stock_movement
+            baseColumnNames: product_id
+            constraintName: fk_stock_movement_product
+            referencedTableName: product
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: stock_movement
+            baseColumnNames: warehouse_id
+            constraintName: fk_stock_movement_warehouse
+            referencedTableName: warehouse
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: stock_movement
+            baseColumnNames: location_id
+            constraintName: fk_stock_movement_location
+            referencedTableName: stock_location
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: stock_movement
+            baseColumnNames: gl_transaction_id
+            constraintName: fk_stock_movement_gl_transaction
+            referencedTableName: gl_transaction
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: stock_movement
+            baseColumnNames: created_by
+            constraintName: fk_stock_movement_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addCheckConstraint:
+            tableName: stock_movement
+            constraintName: chk_stock_movement_type
+            checkConstraint: "movement_type IN ('IN', 'OUT', 'ADJUSTMENT', 'TRANSFER')"
+
+  # -----------------------------------------------------------------------------
+  # 7. TABLE: sales_invoice (Factures clients)
+  # En-têtes de factures de vente
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-07-create-sales-invoice
+      author: architect
+      changes:
+        - createTable:
+            tableName: sales_invoice
+            remarks: "Factures clients (ventes)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fiscal_year_id
+                  type: BIGINT
+                  remarks: "Exercice comptable"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: invoice_number
+                  type: VARCHAR(50)
+                  remarks: "Numéro de facture"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: invoice_date
+                  type: DATE
+                  remarks: "Date de facture"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: due_date
+                  type: DATE
+                  remarks: "Date d'échéance"
+              - column:
+                  name: customer_id
+                  type: BIGINT
+                  remarks: "Client"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: billing_address_id
+                  type: BIGINT
+                  remarks: "Adresse de facturation"
+              - column:
+                  name: shipping_address_id
+                  type: BIGINT
+                  remarks: "Adresse de livraison"
+              - column:
+                  name: currency_id
+                  type: BIGINT
+                  remarks: "Devise"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: exchange_rate
+                  type: NUMERIC(20, 10)
+                  remarks: "Taux de change"
+                  defaultValueNumeric: 1.0
+              - column:
+                  name: subtotal
+                  type: NUMERIC(20, 4)
+                  remarks: "Sous-total HT"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tax_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant TVA"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant total TTC"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: paid_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant payé"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: balance_due
+                  type: NUMERIC(20, 4)
+                  remarks: "Solde dû"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  remarks: "Statut: DRAFT, VALIDATED, POSTED, PAID, CANCELLED"
+                  defaultValue: "DRAFT"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payment_terms_days
+                  type: INTEGER
+                  remarks: "Délai de paiement"
+                  defaultValueNumeric: 30
+              - column:
+                  name: reference
+                  type: VARCHAR(100)
+                  remarks: "Référence externe"
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: gl_transaction_id
+                  type: BIGINT
+                  remarks: "Écriture comptable générée"
+              - column:
+                  name: validated_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: validated_by
+                  type: BIGINT
+              - column:
+                  name: posted_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: posted_by
+                  type: BIGINT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: company_id
+            constraintName: fk_sales_invoice_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: fiscal_year_id
+            constraintName: fk_sales_invoice_fiscal_year
+            referencedTableName: fiscal_year
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: customer_id
+            constraintName: fk_sales_invoice_customer
+            referencedTableName: business_partner
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: billing_address_id
+            constraintName: fk_sales_invoice_billing_address
+            referencedTableName: business_partner_address
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: shipping_address_id
+            constraintName: fk_sales_invoice_shipping_address
+            referencedTableName: business_partner_address
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: currency_id
+            constraintName: fk_sales_invoice_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: gl_transaction_id
+            constraintName: fk_sales_invoice_gl_transaction
+            referencedTableName: gl_transaction
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: validated_by
+            constraintName: fk_sales_invoice_validated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: posted_by
+            constraintName: fk_sales_invoice_posted_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: created_by
+            constraintName: fk_sales_invoice_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice
+            baseColumnNames: updated_by
+            constraintName: fk_sales_invoice_updated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: sales_invoice
+            columnNames: company_id, invoice_number
+            constraintName: uk_sales_invoice_company_number
+
+        - addCheckConstraint:
+            tableName: sales_invoice
+            constraintName: chk_sales_invoice_status
+            checkConstraint: "status IN ('DRAFT', 'VALIDATED', 'POSTED', 'PAID', 'CANCELLED')"
+
+  # -----------------------------------------------------------------------------
+  # 8. TABLE: sales_invoice_line (Lignes de factures clients)
+  # Détail des lignes de factures
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-08-create-sales-invoice-line
+      author: architect
+      changes:
+        - createTable:
+            tableName: sales_invoice_line
+            remarks: "Lignes de factures clients"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: sales_invoice_id
+                  type: BIGINT
+                  remarks: "Facture parent"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: line_number
+                  type: INTEGER
+                  remarks: "Numéro de ligne"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: product_id
+                  type: BIGINT
+                  remarks: "Article vendu"
+              - column:
+                  name: description
+                  type: TEXT
+                  remarks: "Description"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: quantity
+                  type: NUMERIC(15, 4)
+                  remarks: "Quantité"
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: unit_price
+                  type: NUMERIC(20, 4)
+                  remarks: "Prix unitaire HT"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: discount_percent
+                  type: NUMERIC(5, 2)
+                  remarks: "Remise en %"
+                  defaultValueNumeric: 0
+              - column:
+                  name: discount_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant remise"
+                  defaultValueNumeric: 0
+              - column:
+                  name: line_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant ligne HT"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tax_code_id
+                  type: BIGINT
+                  remarks: "Code TVA"
+              - column:
+                  name: tax_rate
+                  type: NUMERIC(10, 4)
+                  remarks: "Taux TVA"
+                  defaultValueNumeric: 0
+              - column:
+                  name: tax_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant TVA"
+                  defaultValueNumeric: 0
+              - column:
+                  name: line_total
+                  type: NUMERIC(20, 4)
+                  remarks: "Total ligne TTC"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: BIGINT
+                  remarks: "Compte de produit"
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice_line
+            baseColumnNames: sales_invoice_id
+            constraintName: fk_sales_line_invoice
+            referencedTableName: sales_invoice
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice_line
+            baseColumnNames: product_id
+            constraintName: fk_sales_line_product
+            referencedTableName: product
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice_line
+            baseColumnNames: tax_code_id
+            constraintName: fk_sales_line_tax_code
+            referencedTableName: tax_code
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: sales_invoice_line
+            baseColumnNames: account_id
+            constraintName: fk_sales_line_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: sales_invoice_line
+            columnNames: sales_invoice_id, line_number
+            constraintName: uk_sales_line_invoice_line_number
+
+        - addCheckConstraint:
+            tableName: sales_invoice_line
+            constraintName: chk_sales_line_quantity
+            checkConstraint: "quantity > 0"
+
+  # -----------------------------------------------------------------------------
+  # 9. TABLE: purchase_invoice (Factures fournisseurs)
+  # En-têtes de factures d'achat
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-09-create-purchase-invoice
+      author: architect
+      changes:
+        - createTable:
+            tableName: purchase_invoice
+            remarks: "Factures fournisseurs (achats)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fiscal_year_id
+                  type: BIGINT
+                  remarks: "Exercice comptable"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: invoice_number
+                  type: VARCHAR(50)
+                  remarks: "Numéro interne"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: supplier_invoice_number
+                  type: VARCHAR(50)
+                  remarks: "Numéro de facture fournisseur"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: invoice_date
+                  type: DATE
+                  remarks: "Date de facture"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: due_date
+                  type: DATE
+                  remarks: "Date d'échéance"
+              - column:
+                  name: supplier_id
+                  type: BIGINT
+                  remarks: "Fournisseur"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: currency_id
+                  type: BIGINT
+                  remarks: "Devise"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: exchange_rate
+                  type: NUMERIC(20, 10)
+                  remarks: "Taux de change"
+                  defaultValueNumeric: 1.0
+              - column:
+                  name: subtotal
+                  type: NUMERIC(20, 4)
+                  remarks: "Sous-total HT"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tax_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant TVA"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant total TTC"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: paid_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant payé"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: balance_due
+                  type: NUMERIC(20, 4)
+                  remarks: "Solde dû"
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  remarks: "Statut: DRAFT, VALIDATED, POSTED, PAID, CANCELLED"
+                  defaultValue: "DRAFT"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payment_terms_days
+                  type: INTEGER
+                  remarks: "Délai de paiement"
+                  defaultValueNumeric: 30
+              - column:
+                  name: reference
+                  type: VARCHAR(100)
+                  remarks: "Référence"
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: gl_transaction_id
+                  type: BIGINT
+                  remarks: "Écriture comptable générée"
+              - column:
+                  name: validated_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: validated_by
+                  type: BIGINT
+              - column:
+                  name: posted_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: posted_by
+                  type: BIGINT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: company_id
+            constraintName: fk_purchase_invoice_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: fiscal_year_id
+            constraintName: fk_purchase_invoice_fiscal_year
+            referencedTableName: fiscal_year
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: supplier_id
+            constraintName: fk_purchase_invoice_supplier
+            referencedTableName: business_partner
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: currency_id
+            constraintName: fk_purchase_invoice_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: gl_transaction_id
+            constraintName: fk_purchase_invoice_gl_transaction
+            referencedTableName: gl_transaction
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: validated_by
+            constraintName: fk_purchase_invoice_validated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: posted_by
+            constraintName: fk_purchase_invoice_posted_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: created_by
+            constraintName: fk_purchase_invoice_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice
+            baseColumnNames: updated_by
+            constraintName: fk_purchase_invoice_updated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: purchase_invoice
+            columnNames: company_id, invoice_number
+            constraintName: uk_purchase_invoice_company_number
+
+        - addCheckConstraint:
+            tableName: purchase_invoice
+            constraintName: chk_purchase_invoice_status
+            checkConstraint: "status IN ('DRAFT', 'VALIDATED', 'POSTED', 'PAID', 'CANCELLED')"
+
+  # -----------------------------------------------------------------------------
+  # 10. TABLE: purchase_invoice_line (Lignes de factures fournisseurs)
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-10-create-purchase-invoice-line
+      author: architect
+      changes:
+        - createTable:
+            tableName: purchase_invoice_line
+            remarks: "Lignes de factures fournisseurs"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: purchase_invoice_id
+                  type: BIGINT
+                  remarks: "Facture parent"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: line_number
+                  type: INTEGER
+                  remarks: "Numéro de ligne"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: product_id
+                  type: BIGINT
+                  remarks: "Article acheté"
+              - column:
+                  name: description
+                  type: TEXT
+                  remarks: "Description"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: quantity
+                  type: NUMERIC(15, 4)
+                  remarks: "Quantité"
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: unit_price
+                  type: NUMERIC(20, 4)
+                  remarks: "Prix unitaire HT"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: discount_percent
+                  type: NUMERIC(5, 2)
+                  remarks: "Remise en %"
+                  defaultValueNumeric: 0
+              - column:
+                  name: discount_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant remise"
+                  defaultValueNumeric: 0
+              - column:
+                  name: line_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant ligne HT"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tax_code_id
+                  type: BIGINT
+                  remarks: "Code TVA"
+              - column:
+                  name: tax_rate
+                  type: NUMERIC(10, 4)
+                  remarks: "Taux TVA"
+                  defaultValueNumeric: 0
+              - column:
+                  name: tax_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant TVA"
+                  defaultValueNumeric: 0
+              - column:
+                  name: line_total
+                  type: NUMERIC(20, 4)
+                  remarks: "Total ligne TTC"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: BIGINT
+                  remarks: "Compte de charge"
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice_line
+            baseColumnNames: purchase_invoice_id
+            constraintName: fk_purchase_line_invoice
+            referencedTableName: purchase_invoice
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice_line
+            baseColumnNames: product_id
+            constraintName: fk_purchase_line_product
+            referencedTableName: product
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice_line
+            baseColumnNames: tax_code_id
+            constraintName: fk_purchase_line_tax_code
+            referencedTableName: tax_code
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: purchase_invoice_line
+            baseColumnNames: account_id
+            constraintName: fk_purchase_line_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: purchase_invoice_line
+            columnNames: purchase_invoice_id, line_number
+            constraintName: uk_purchase_line_invoice_line_number
+
+        - addCheckConstraint:
+            tableName: purchase_invoice_line
+            constraintName: chk_purchase_line_quantity
+            checkConstraint: "quantity > 0"
+
+  # -----------------------------------------------------------------------------
+  # 11. TABLE: payment (Règlements)
+  # Paiements clients et fournisseurs
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-11-create-payment
+      author: architect
+      changes:
+        - createTable:
+            tableName: payment
+            remarks: "Règlements (clients/fournisseurs)"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: company_id
+                  type: BIGINT
+                  remarks: "Société"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fiscal_year_id
+                  type: BIGINT
+                  remarks: "Exercice comptable"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payment_number
+                  type: VARCHAR(50)
+                  remarks: "Numéro de règlement"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payment_date
+                  type: DATE
+                  remarks: "Date de règlement"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payment_type
+                  type: VARCHAR(20)
+                  remarks: "Type: RECEIPT (encaissement), PAYMENT (décaissement)"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: business_partner_id
+                  type: BIGINT
+                  remarks: "Tiers payeur/bénéficiaire"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: currency_id
+                  type: BIGINT
+                  remarks: "Devise"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: exchange_rate
+                  type: NUMERIC(20, 10)
+                  remarks: "Taux de change"
+                  defaultValueNumeric: 1.0
+              - column:
+                  name: amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant du règlement"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: allocated_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant affecté"
+                  defaultValueNumeric: 0
+              - column:
+                  name: unallocated_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant non affecté"
+                  defaultValueNumeric: 0
+              - column:
+                  name: payment_method
+                  type: VARCHAR(30)
+                  remarks: "Moyen: CASH, BANK_TRANSFER, CHECK, CREDIT_CARD, etc."
+                  constraints:
+                    nullable: false
+              - column:
+                  name: bank_account_id
+                  type: BIGINT
+                  remarks: "Compte bancaire (compte 512xxx)"
+              - column:
+                  name: reference
+                  type: VARCHAR(100)
+                  remarks: "Référence (n° chèque, virement, etc.)"
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: gl_transaction_id
+                  type: BIGINT
+                  remarks: "Écriture comptable générée"
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  remarks: "Statut: DRAFT, POSTED, CANCELLED"
+                  defaultValue: "DRAFT"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: posted_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: posted_by
+                  type: BIGINT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+              - column:
+                  name: updated_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: company_id
+            constraintName: fk_payment_company
+            referencedTableName: company
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: fiscal_year_id
+            constraintName: fk_payment_fiscal_year
+            referencedTableName: fiscal_year
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: business_partner_id
+            constraintName: fk_payment_business_partner
+            referencedTableName: business_partner
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: currency_id
+            constraintName: fk_payment_currency
+            referencedTableName: currency
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: bank_account_id
+            constraintName: fk_payment_bank_account
+            referencedTableName: account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: gl_transaction_id
+            constraintName: fk_payment_gl_transaction
+            referencedTableName: gl_transaction
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: posted_by
+            constraintName: fk_payment_posted_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: created_by
+            constraintName: fk_payment_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addForeignKeyConstraint:
+            baseTableName: payment
+            baseColumnNames: updated_by
+            constraintName: fk_payment_updated_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addUniqueConstraint:
+            tableName: payment
+            columnNames: company_id, payment_number
+            constraintName: uk_payment_company_number
+
+        - addCheckConstraint:
+            tableName: payment
+            constraintName: chk_payment_type
+            checkConstraint: "payment_type IN ('RECEIPT', 'PAYMENT')"
+
+        - addCheckConstraint:
+            tableName: payment
+            constraintName: chk_payment_method
+            checkConstraint: "payment_method IN ('CASH', 'BANK_TRANSFER', 'CHECK', 'CREDIT_CARD', 'DIRECT_DEBIT', 'OTHER')"
+
+        - addCheckConstraint:
+            tableName: payment
+            constraintName: chk_payment_status
+            checkConstraint: "status IN ('DRAFT', 'POSTED', 'CANCELLED')"
+
+        - addCheckConstraint:
+            tableName: payment
+            constraintName: chk_payment_amount
+            checkConstraint: "amount > 0"
+
+  # -----------------------------------------------------------------------------
+  # 12. TABLE: payment_allocation (Affectation des règlements)
+  # Lien entre règlements et factures
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 003-12-create-payment-allocation
+      author: architect
+      changes:
+        - createTable:
+            tableName: payment_allocation
+            remarks: "Affectation des règlements aux factures"
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: payment_id
+                  type: BIGINT
+                  remarks: "Règlement"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: invoice_type
+                  type: VARCHAR(20)
+                  remarks: "Type: SALES, PURCHASE"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sales_invoice_id
+                  type: BIGINT
+                  remarks: "Facture client (si type=SALES)"
+              - column:
+                  name: purchase_invoice_id
+                  type: BIGINT
+                  remarks: "Facture fournisseur (si type=PURCHASE)"
+              - column:
+                  name: allocated_amount
+                  type: NUMERIC(20, 4)
+                  remarks: "Montant affecté"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: allocation_date
+                  type: DATE
+                  remarks: "Date d'affectation"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: BIGINT
+
+        - addForeignKeyConstraint:
+            baseTableName: payment_allocation
+            baseColumnNames: payment_id
+            constraintName: fk_payment_allocation_payment
+            referencedTableName: payment
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: payment_allocation
+            baseColumnNames: sales_invoice_id
+            constraintName: fk_payment_allocation_sales_invoice
+            referencedTableName: sales_invoice
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: payment_allocation
+            baseColumnNames: purchase_invoice_id
+            constraintName: fk_payment_allocation_purchase_invoice
+            referencedTableName: purchase_invoice
+            referencedColumnNames: id
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: payment_allocation
+            baseColumnNames: created_by
+            constraintName: fk_payment_allocation_created_by
+            referencedTableName: user_account
+            referencedColumnNames: id
+            onDelete: SET NULL
+
+        - addCheckConstraint:
+            tableName: payment_allocation
+            constraintName: chk_payment_allocation_invoice_type
+            checkConstraint: "invoice_type IN ('SALES', 'PURCHASE')"
+
+        - addCheckConstraint:
+            tableName: payment_allocation
+            constraintName: chk_payment_allocation_invoice_xor
+            checkConstraint: "(invoice_type = 'SALES' AND sales_invoice_id IS NOT NULL AND purchase_invoice_id IS NULL) OR (invoice_type = 'PURCHASE' AND purchase_invoice_id IS NOT NULL AND sales_invoice_id IS NULL)"
+
+        - addCheckConstraint:
+            tableName: payment_allocation
+            constraintName: chk_payment_allocation_amount
+            checkConstraint: "allocated_amount > 0"

@@ -1,0 +1,23 @@
+databaseChangeLog:
+  # Master changelog for ERP Sage X3 MVP
+  # This file orchestrates all database migrations in order
+
+  - include:
+      file: changelogs/001-foundation-tables.yaml
+      relativeToChangelogFile: true
+
+  - include:
+      file: changelogs/002-general-ledger.yaml
+      relativeToChangelogFile: true
+
+  - include:
+      file: changelogs/003-business-entities.yaml
+      relativeToChangelogFile: true
+
+  - include:
+      file: changelogs/004-constraints-triggers.yaml
+      relativeToChangelogFile: true
+
+  - include:
+      file: changelogs/005-indexes.yaml
+      relativeToChangelogFile: true

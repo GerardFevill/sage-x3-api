@@ -1,0 +1,673 @@
+databaseChangeLog:
+  # =============================================================================
+  # 005 - INDEXES (Index de performance)
+  # =============================================================================
+  # Index stratégiques pour optimiser les requêtes fréquentes :
+  # - Recherches par société (company_id)
+  # - Recherches par exercice (fiscal_year_id)
+  # - Recherches par dates
+  # - Recherches par statuts
+  # - Recherches de tiers
+  # - Jointures fréquentes
+  # - Index composites pour requêtes complexes
+  #
+  # Note : Les PK et UK créent automatiquement des index
+  # =============================================================================
+
+  # -----------------------------------------------------------------------------
+  # INDEXES: General Ledger
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 005-01-indexes-gl-transaction
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_gl_transaction_company_date
+            tableName: gl_transaction
+            columns:
+              - column:
+                  name: company_id
+              - column:
+                  name: transaction_date
+        - createIndex:
+            indexName: idx_gl_transaction_fiscal_year
+            tableName: gl_transaction
+            columns:
+              - column:
+                  name: fiscal_year_id
+        - createIndex:
+            indexName: idx_gl_transaction_journal
+            tableName: gl_transaction
+            columns:
+              - column:
+                  name: journal_id
+        - createIndex:
+            indexName: idx_gl_transaction_status
+            tableName: gl_transaction
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_gl_transaction_source
+            tableName: gl_transaction
+            columns:
+              - column:
+                  name: source_type
+              - column:
+                  name: source_id
+        - createIndex:
+            indexName: idx_gl_transaction_posting_date
+            tableName: gl_transaction
+            columns:
+              - column:
+                  name: posting_date
+
+  - changeSet:
+      id: 005-02-indexes-gl-transaction-line
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_gl_line_transaction
+            tableName: gl_transaction_line
+            columns:
+              - column:
+                  name: gl_transaction_id
+        - createIndex:
+            indexName: idx_gl_line_account
+            tableName: gl_transaction_line
+            columns:
+              - column:
+                  name: account_id
+        - createIndex:
+            indexName: idx_gl_line_third_party
+            tableName: gl_transaction_line
+            columns:
+              - column:
+                  name: third_party_type
+              - column:
+                  name: third_party_id
+        - createIndex:
+            indexName: idx_gl_line_reconciliation
+            tableName: gl_transaction_line
+            columns:
+              - column:
+                  name: reconciliation_id
+        - createIndex:
+            indexName: idx_gl_line_is_reconciled
+            tableName: gl_transaction_line
+            columns:
+              - column:
+                  name: is_reconciled
+
+  - changeSet:
+      id: 005-03-indexes-gl-balance
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_gl_balance_company_fy_account
+            tableName: gl_balance
+            columns:
+              - column:
+                  name: company_id
+              - column:
+                  name: fiscal_year_id
+              - column:
+                  name: account_id
+        - createIndex:
+            indexName: idx_gl_balance_period
+            tableName: gl_balance
+            columns:
+              - column:
+                  name: period_year
+              - column:
+                  name: period_month
+
+  - changeSet:
+      id: 005-04-indexes-gl-reconciliation
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_gl_reconciliation_company_account
+            tableName: gl_reconciliation
+            columns:
+              - column:
+                  name: company_id
+              - column:
+                  name: account_id
+        - createIndex:
+            indexName: idx_gl_reconciliation_date
+            tableName: gl_reconciliation
+            columns:
+              - column:
+                  name: reconciliation_date
+
+  # -----------------------------------------------------------------------------
+  # INDEXES: Business Partners
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 005-05-indexes-business-partner
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_bp_company
+            tableName: business_partner
+            columns:
+              - column:
+                  name: company_id
+        - createIndex:
+            indexName: idx_bp_type
+            tableName: business_partner
+            columns:
+              - column:
+                  name: partner_type
+        - createIndex:
+            indexName: idx_bp_is_customer
+            tableName: business_partner
+            columns:
+              - column:
+                  name: is_customer
+        - createIndex:
+            indexName: idx_bp_is_supplier
+            tableName: business_partner
+            columns:
+              - column:
+                  name: is_supplier
+        - createIndex:
+            indexName: idx_bp_name
+            tableName: business_partner
+            columns:
+              - column:
+                  name: name
+        - createIndex:
+            indexName: idx_bp_email
+            tableName: business_partner
+            columns:
+              - column:
+                  name: email
+
+  - changeSet:
+      id: 005-06-indexes-bp-address
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_bp_address_partner
+            tableName: business_partner_address
+            columns:
+              - column:
+                  name: business_partner_id
+        - createIndex:
+            indexName: idx_bp_address_type
+            tableName: business_partner_address
+            columns:
+              - column:
+                  name: address_type
+        - createIndex:
+            indexName: idx_bp_address_default
+            tableName: business_partner_address
+            columns:
+              - column:
+                  name: is_default
+
+  # -----------------------------------------------------------------------------
+  # INDEXES: Products & Stock
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 005-07-indexes-product
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_product_company
+            tableName: product
+            columns:
+              - column:
+                  name: company_id
+        - createIndex:
+            indexName: idx_product_type
+            tableName: product
+            columns:
+              - column:
+                  name: product_type
+        - createIndex:
+            indexName: idx_product_category
+            tableName: product
+            columns:
+              - column:
+                  name: category
+        - createIndex:
+            indexName: idx_product_barcode
+            tableName: product
+            columns:
+              - column:
+                  name: barcode
+        - createIndex:
+            indexName: idx_product_name
+            tableName: product
+            columns:
+              - column:
+                  name: name
+
+  - changeSet:
+      id: 005-08-indexes-warehouse
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_warehouse_company
+            tableName: warehouse
+            columns:
+              - column:
+                  name: company_id
+
+  - changeSet:
+      id: 005-09-indexes-stock-location
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_stock_location_warehouse
+            tableName: stock_location
+            columns:
+              - column:
+                  name: warehouse_id
+
+  - changeSet:
+      id: 005-10-indexes-stock-movement
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_stock_movement_company_date
+            tableName: stock_movement
+            columns:
+              - column:
+                  name: company_id
+              - column:
+                  name: movement_date
+        - createIndex:
+            indexName: idx_stock_movement_product
+            tableName: stock_movement
+            columns:
+              - column:
+                  name: product_id
+        - createIndex:
+            indexName: idx_stock_movement_warehouse
+            tableName: stock_movement
+            columns:
+              - column:
+                  name: warehouse_id
+        - createIndex:
+            indexName: idx_stock_movement_type
+            tableName: stock_movement
+            columns:
+              - column:
+                  name: movement_type
+        - createIndex:
+            indexName: idx_stock_movement_source
+            tableName: stock_movement
+            columns:
+              - column:
+                  name: source_type
+              - column:
+                  name: source_id
+
+  # -----------------------------------------------------------------------------
+  # INDEXES: Sales Invoices
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 005-11-indexes-sales-invoice
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_sales_invoice_company_date
+            tableName: sales_invoice
+            columns:
+              - column:
+                  name: company_id
+              - column:
+                  name: invoice_date
+        - createIndex:
+            indexName: idx_sales_invoice_fiscal_year
+            tableName: sales_invoice
+            columns:
+              - column:
+                  name: fiscal_year_id
+        - createIndex:
+            indexName: idx_sales_invoice_customer
+            tableName: sales_invoice
+            columns:
+              - column:
+                  name: customer_id
+        - createIndex:
+            indexName: idx_sales_invoice_status
+            tableName: sales_invoice
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_sales_invoice_due_date
+            tableName: sales_invoice
+            columns:
+              - column:
+                  name: due_date
+        - createIndex:
+            indexName: idx_sales_invoice_gl_transaction
+            tableName: sales_invoice
+            columns:
+              - column:
+                  name: gl_transaction_id
+
+  - changeSet:
+      id: 005-12-indexes-sales-invoice-line
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_sales_line_invoice
+            tableName: sales_invoice_line
+            columns:
+              - column:
+                  name: sales_invoice_id
+        - createIndex:
+            indexName: idx_sales_line_product
+            tableName: sales_invoice_line
+            columns:
+              - column:
+                  name: product_id
+
+  # -----------------------------------------------------------------------------
+  # INDEXES: Purchase Invoices
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 005-13-indexes-purchase-invoice
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_purchase_invoice_company_date
+            tableName: purchase_invoice
+            columns:
+              - column:
+                  name: company_id
+              - column:
+                  name: invoice_date
+        - createIndex:
+            indexName: idx_purchase_invoice_fiscal_year
+            tableName: purchase_invoice
+            columns:
+              - column:
+                  name: fiscal_year_id
+        - createIndex:
+            indexName: idx_purchase_invoice_supplier
+            tableName: purchase_invoice
+            columns:
+              - column:
+                  name: supplier_id
+        - createIndex:
+            indexName: idx_purchase_invoice_status
+            tableName: purchase_invoice
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_purchase_invoice_due_date
+            tableName: purchase_invoice
+            columns:
+              - column:
+                  name: due_date
+        - createIndex:
+            indexName: idx_purchase_invoice_gl_transaction
+            tableName: purchase_invoice
+            columns:
+              - column:
+                  name: gl_transaction_id
+
+  - changeSet:
+      id: 005-14-indexes-purchase-invoice-line
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_purchase_line_invoice
+            tableName: purchase_invoice_line
+            columns:
+              - column:
+                  name: purchase_invoice_id
+        - createIndex:
+            indexName: idx_purchase_line_product
+            tableName: purchase_invoice_line
+            columns:
+              - column:
+                  name: product_id
+
+  # -----------------------------------------------------------------------------
+  # INDEXES: Payments
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 005-15-indexes-payment
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_payment_company_date
+            tableName: payment
+            columns:
+              - column:
+                  name: company_id
+              - column:
+                  name: payment_date
+        - createIndex:
+            indexName: idx_payment_fiscal_year
+            tableName: payment
+            columns:
+              - column:
+                  name: fiscal_year_id
+        - createIndex:
+            indexName: idx_payment_business_partner
+            tableName: payment
+            columns:
+              - column:
+                  name: business_partner_id
+        - createIndex:
+            indexName: idx_payment_type
+            tableName: payment
+            columns:
+              - column:
+                  name: payment_type
+        - createIndex:
+            indexName: idx_payment_status
+            tableName: payment
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_payment_gl_transaction
+            tableName: payment
+            columns:
+              - column:
+                  name: gl_transaction_id
+
+  - changeSet:
+      id: 005-16-indexes-payment-allocation
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_payment_allocation_payment
+            tableName: payment_allocation
+            columns:
+              - column:
+                  name: payment_id
+        - createIndex:
+            indexName: idx_payment_allocation_sales_invoice
+            tableName: payment_allocation
+            columns:
+              - column:
+                  name: sales_invoice_id
+        - createIndex:
+            indexName: idx_payment_allocation_purchase_invoice
+            tableName: payment_allocation
+            columns:
+              - column:
+                  name: purchase_invoice_id
+
+  # -----------------------------------------------------------------------------
+  # INDEXES: Foundation Tables
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 005-17-indexes-account
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_account_company
+            tableName: account
+            columns:
+              - column:
+                  name: company_id
+        - createIndex:
+            indexName: idx_account_type
+            tableName: account
+            columns:
+              - column:
+                  name: account_type
+        - createIndex:
+            indexName: idx_account_parent
+            tableName: account
+            columns:
+              - column:
+                  name: parent_account_id
+        - createIndex:
+            indexName: idx_account_allow_posting
+            tableName: account
+            columns:
+              - column:
+                  name: allow_posting
+        - createIndex:
+            indexName: idx_account_reconcilable
+            tableName: account
+            columns:
+              - column:
+                  name: reconcilable
+
+  - changeSet:
+      id: 005-18-indexes-fiscal-year
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_fiscal_year_company
+            tableName: fiscal_year
+            columns:
+              - column:
+                  name: company_id
+        - createIndex:
+            indexName: idx_fiscal_year_status
+            tableName: fiscal_year
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_fiscal_year_dates
+            tableName: fiscal_year
+            columns:
+              - column:
+                  name: start_date
+              - column:
+                  name: end_date
+
+  - changeSet:
+      id: 005-19-indexes-journal
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_journal_company
+            tableName: journal
+            columns:
+              - column:
+                  name: company_id
+        - createIndex:
+            indexName: idx_journal_type
+            tableName: journal
+            columns:
+              - column:
+                  name: journal_type
+
+  - changeSet:
+      id: 005-20-indexes-tax-code
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_tax_code_company
+            tableName: tax_code
+            columns:
+              - column:
+                  name: company_id
+        - createIndex:
+            indexName: idx_tax_code_direction
+            tableName: tax_code
+            columns:
+              - column:
+                  name: direction
+
+  - changeSet:
+      id: 005-21-indexes-exchange-rate
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_exchange_rate_from_to_date
+            tableName: exchange_rate
+            columns:
+              - column:
+                  name: from_currency_id
+              - column:
+                  name: to_currency_id
+              - column:
+                  name: rate_date
+
+  - changeSet:
+      id: 005-22-indexes-audit-log
+      author: architect
+      changes:
+        - createIndex:
+            indexName: idx_audit_log_user
+            tableName: audit_log
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            indexName: idx_audit_log_company
+            tableName: audit_log
+            columns:
+              - column:
+                  name: company_id
+        - createIndex:
+            indexName: idx_audit_log_table_record
+            tableName: audit_log
+            columns:
+              - column:
+                  name: table_name
+              - column:
+                  name: record_id
+        - createIndex:
+            indexName: idx_audit_log_created_at
+            tableName: audit_log
+            columns:
+              - column:
+                  name: created_at
+
+  # -----------------------------------------------------------------------------
+  # INDEXES: Full-text search (pour recherches textuelles)
+  # -----------------------------------------------------------------------------
+  - changeSet:
+      id: 005-23-indexes-fulltext
+      author: architect
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Index GIN pour recherche full-text sur business_partner
+              CREATE INDEX idx_bp_name_gin ON business_partner USING GIN (to_tsvector('french', name));
+
+              -- Index GIN pour recherche full-text sur product
+              CREATE INDEX idx_product_name_gin ON product USING GIN (to_tsvector('french', name));
+              CREATE INDEX idx_product_description_gin ON product USING GIN (to_tsvector('french', description));
+
+              -- Index GIN pour recherche dans audit_log (JSONB)
+              CREATE INDEX idx_audit_log_old_values_gin ON audit_log USING GIN (old_values);
+              CREATE INDEX idx_audit_log_new_values_gin ON audit_log USING GIN (new_values);
+
+              COMMENT ON INDEX idx_bp_name_gin IS 'Full-text search index on business partner name';
+              COMMENT ON INDEX idx_product_name_gin IS 'Full-text search index on product name';
+              COMMENT ON INDEX idx_product_description_gin IS 'Full-text search index on product description';
+              COMMENT ON INDEX idx_audit_log_old_values_gin IS 'GIN index for JSONB queries on audit old values';
+              COMMENT ON INDEX idx_audit_log_new_values_gin IS 'GIN index for JSONB queries on audit new values';
