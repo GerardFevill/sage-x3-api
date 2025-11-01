@@ -79,6 +79,6 @@ export class JournalService {
 
   async remove(id: number): Promise<void> {
     await this.findOne(id);
-    await this.journalRepository.softDelete(id);
+    await this.journalRepository.customSoftDelete(id);
   }
 }

@@ -34,7 +34,7 @@ export class JournalRepository extends Repository<Journal> {
     return this.find({ where: { companyId, journalType }, order: { journalCode: 'ASC' } });
   }
 
-  async softDelete(id: number): Promise<void> {
+  async customSoftDelete(id: number): Promise<void> {
     await this.update(id, { isActive: false });
   }
 }

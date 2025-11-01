@@ -189,7 +189,7 @@ export class AccountService {
     // TODO: Check if account has transactions
     // TODO: Check if account has child accounts
 
-    await this.accountRepository.softDelete(id);
+    await this.accountRepository.customSoftDelete(id);
 
     this.logger.log(`Account with ID ${id} soft deleted successfully`);
   }

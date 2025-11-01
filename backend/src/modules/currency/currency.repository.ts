@@ -73,7 +73,7 @@ export class CurrencyRepository extends Repository<Currency> {
    * Soft delete a currency by setting isActive to false
    * @param id - Currency ID
    */
-  async softDelete(id: number): Promise<void> {
+  async customSoftDelete(id: number): Promise<void> {
     await this.update(id, { isActive: false });
   }
 

@@ -86,6 +86,6 @@ export class BusinessPartnerService {
 
   async remove(id: number): Promise<void> {
     await this.findOne(id);
-    await this.businessPartnerRepository.softDelete(id);
+    await this.businessPartnerRepository.customSoftDelete(id);
   }
 }

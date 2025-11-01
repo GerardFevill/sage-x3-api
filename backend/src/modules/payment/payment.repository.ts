@@ -82,7 +82,7 @@ export class PaymentRepository extends Repository<Payment> {
     return (await query.getCount()) > 0;
   }
 
-  async softDelete(id: number): Promise<void> {
+  async customSoftDelete(id: number): Promise<void> {
     await this.update(id, { isActive: false });
   }
 

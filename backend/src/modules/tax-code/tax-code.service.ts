@@ -79,6 +79,6 @@ export class TaxCodeService {
 
   async remove(id: number): Promise<void> {
     await this.findOne(id);
-    await this.taxCodeRepository.softDelete(id);
+    await this.taxCodeRepository.customSoftDelete(id);
   }
 }

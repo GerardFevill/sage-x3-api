@@ -90,6 +90,6 @@ export class ProductService {
 
   async remove(id: number): Promise<void> {
     await this.findOne(id);
-    await this.productRepository.softDelete(id);
+    await this.productRepository.customSoftDelete(id);
   }
 }

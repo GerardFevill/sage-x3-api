@@ -71,7 +71,7 @@ export class CompanyRepository extends Repository<Company> {
   /**
    * Soft delete (set isActive to false instead of deleting)
    */
-  async softDelete(id: number): Promise<void> {
+  async customSoftDelete(id: number): Promise<void> {
     await this.update(id, { isActive: false });
   }
 

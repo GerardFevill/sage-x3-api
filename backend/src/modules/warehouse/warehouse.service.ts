@@ -75,6 +75,6 @@ export class WarehouseService {
 
   async remove(id: number): Promise<void> {
     await this.findOne(id);
-    await this.warehouseRepository.softDelete(id);
+    await this.warehouseRepository.customSoftDelete(id);
   }
 }

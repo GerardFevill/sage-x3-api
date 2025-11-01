@@ -27,7 +27,7 @@ import { PaymentModule } from './modules/payment/payment.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) =>
-        configService.get('database'),
+        configService.get('database')!,
       inject: [ConfigService],
     }),
 

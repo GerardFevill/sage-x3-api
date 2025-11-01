@@ -92,7 +92,7 @@ export class AccountRepository extends Repository<Account> {
     });
   }
 
-  async softDelete(id: number): Promise<void> {
+  async customSoftDelete(id: number): Promise<void> {
     await this.update(id, { isActive: false });
   }
 }

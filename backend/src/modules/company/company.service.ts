@@ -142,7 +142,7 @@ export class CompanyService {
     // - etc.
 
     try {
-      await this.companyRepository.softDelete(id);
+      await this.companyRepository.customSoftDelete(id);
       this.logger.log(`Company soft deleted successfully: ${id}`);
     } catch (error) {
       this.logger.error(`Failed to delete company: ${error.message}`, error.stack);

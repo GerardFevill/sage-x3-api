@@ -150,7 +150,7 @@ export class FiscalYearRepository extends Repository<FiscalYear> {
    * Soft delete a fiscal year by setting isActive to false
    * @param id - Fiscal year ID
    */
-  async softDelete(id: number): Promise<void> {
+  async customSoftDelete(id: number): Promise<void> {
     await this.update(id, { isActive: false });
   }
 

@@ -271,7 +271,7 @@ export class FiscalYearService {
     //   throw new BadRequestException('Cannot delete a fiscal year with transactions');
     // }
 
-    await this.fiscalYearRepository.softDelete(id);
+    await this.fiscalYearRepository.customSoftDelete(id);
 
     this.logger.log(`Fiscal year with ID ${id} soft deleted successfully`);
   }

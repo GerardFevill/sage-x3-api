@@ -156,7 +156,7 @@ export class CurrencyService {
     // Verify currency exists
     await this.findOne(id);
 
-    await this.currencyRepository.softDelete(id);
+    await this.currencyRepository.customSoftDelete(id);
 
     this.logger.log(`Currency with ID ${id} soft deleted successfully`);
   }

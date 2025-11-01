@@ -128,7 +128,7 @@ export class InvoiceService {
 
     // Recalculate balance if totalAmount is updated
     if (updateInvoiceDto.totalAmount !== undefined) {
-      updateInvoiceDto['balance'] = updateInvoiceDto.totalAmount - invoice.paidAmount;
+      invoice.balance = updateInvoiceDto.totalAmount - Number(invoice.paidAmount);
     }
 
     Object.assign(invoice, updateInvoiceDto);
@@ -161,6 +161,6 @@ export class InvoiceService {
 
   async remove(id: number): Promise<void> {
     await this.findOne(id);
-    await this.invoiceRepository.softDelete(id);
+    await this.invoiceRepository.customSoftDelete(id);
   }
 }

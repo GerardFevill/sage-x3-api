@@ -34,7 +34,7 @@ export class TaxCodeRepository extends Repository<TaxCode> {
     return this.find({ where: { companyId, taxType }, order: { taxCode: 'ASC' } });
   }
 
-  async softDelete(id: number): Promise<void> {
+  async customSoftDelete(id: number): Promise<void> {
     await this.update(id, { isActive: false });
   }
 }

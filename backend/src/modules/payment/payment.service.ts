@@ -131,6 +131,6 @@ export class PaymentService {
 
   async remove(id: number): Promise<void> {
     await this.findOne(id);
-    await this.paymentRepository.softDelete(id);
+    await this.paymentRepository.customSoftDelete(id);
   }
 }
