@@ -63,8 +63,7 @@ Thumbs.db
 *.sqlite3
 *.db
 
-# Package manager
-package-lock.json
+# Package manager lock files (keep package-lock.json for production consistency)
 yarn.lock
 pnpm-lock.yaml
 
