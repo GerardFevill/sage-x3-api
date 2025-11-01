@@ -1,0 +1,284 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2025-01-15T00:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2023.5.8",
+  "resources": [
+    {
+      "_id": "wrk_erp_sage_x3",
+      "_type": "workspace",
+      "name": "ERP Sage X3 MVP API",
+      "description": "Complete ERP API with 11 modules: Company, Currency, Fiscal Year, Account, Journal, Tax Code, Business Partner, Product, Warehouse, Invoice, Payment",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "http://localhost:3000/api",
+        "companyId": "1",
+        "currencyId": "1",
+        "fiscalYearId": "1",
+        "businessPartnerId": "1",
+        "productId": "1",
+        "warehouseId": "1",
+        "invoiceId": "1",
+        "paymentId": "1"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "baseUrl",
+          "companyId",
+          "currencyId",
+          "fiscalYearId",
+          "businessPartnerId",
+          "productId",
+          "warehouseId",
+          "invoiceId",
+          "paymentId"
+        ]
+      },
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 1,
+      "parentId": "wrk_erp_sage_x3"
+    },
+    {
+      "_id": "fld_company",
+      "_type": "request_group",
+      "name": "1. Company",
+      "description": "Company management endpoints",
+      "environment": {},
+      "parentId": "wrk_erp_sage_x3",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_company_create",
+      "_type": "request",
+      "name": "Create Company",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/company",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"code\": \"FR01\",\n  \"name\": \"ACME France\",\n  \"legalName\": \"ACME France SAS\",\n  \"taxId\": \"FR12345678901\",\n  \"address\": \"123 Rue de la Paix\",\n  \"city\": \"Paris\",\n  \"postalCode\": \"75001\",\n  \"countryCode\": \"FR\"\n}"
+      },
+      "parentId": "fld_company",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_company_list",
+      "_type": "request",
+      "name": "Get All Companies",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/company",
+      "parentId": "fld_company",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_company_get",
+      "_type": "request",
+      "name": "Get Company by ID",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/company/{{ _.companyId }}",
+      "parentId": "fld_company",
+      "metaSortKey": 3
+    },
+    {
+      "_id": "fld_currency",
+      "_type": "request_group",
+      "name": "2. Currency",
+      "description": "Currency management endpoints",
+      "parentId": "wrk_erp_sage_x3",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_currency_create",
+      "_type": "request",
+      "name": "Create Currency",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/currency",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"code\": \"EUR\",\n  \"name\": \"Euro\",\n  \"symbol\": \"€\",\n  \"decimalPlaces\": 2\n}"
+      },
+      "parentId": "fld_currency",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_currency_list",
+      "_type": "request",
+      "name": "Get All Currencies",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/currency",
+      "parentId": "fld_currency",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "fld_fiscal_year",
+      "_type": "request_group",
+      "name": "3. Fiscal Year",
+      "description": "Fiscal year management endpoints",
+      "parentId": "wrk_erp_sage_x3",
+      "metaSortKey": 3
+    },
+    {
+      "_id": "req_fiscal_year_create",
+      "_type": "request",
+      "name": "Create Fiscal Year",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/fiscal-year",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"companyId\": {{ _.companyId }},\n  \"code\": \"FY2025\",\n  \"name\": \"Exercice Fiscal 2025\",\n  \"startDate\": \"2025-01-01\",\n  \"endDate\": \"2025-12-31\",\n  \"numberOfPeriods\": 12\n}"
+      },
+      "parentId": "fld_fiscal_year",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_fiscal_year_close",
+      "_type": "request",
+      "name": "Close Fiscal Year",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/fiscal-year/{{ _.fiscalYearId }}/close",
+      "parentId": "fld_fiscal_year",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "fld_invoice",
+      "_type": "request_group",
+      "name": "10. Invoice",
+      "description": "Invoice management endpoints",
+      "parentId": "wrk_erp_sage_x3",
+      "metaSortKey": 10
+    },
+    {
+      "_id": "req_invoice_create",
+      "_type": "request",
+      "name": "Create Invoice",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/invoice",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"companyId\": {{ _.companyId }},\n  \"invoiceNumber\": \"INV-2025-001\",\n  \"invoiceType\": \"SALES\",\n  \"businessPartnerId\": {{ _.businessPartnerId }},\n  \"invoiceDate\": \"2025-01-15\",\n  \"dueDate\": \"2025-02-15\",\n  \"currencyId\": {{ _.currencyId }},\n  \"exchangeRate\": 1.0,\n  \"totalBeforeTax\": 1000.00,\n  \"totalTax\": 200.00,\n  \"totalAmount\": 1200.00,\n  \"fiscalYearId\": {{ _.fiscalYearId }},\n  \"notes\": \"Facture pour services de conseil\",\n  \"poReference\": \"PO-12345\"\n}"
+      },
+      "parentId": "fld_invoice",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_invoice_list",
+      "_type": "request",
+      "name": "Get All Invoices",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/invoice",
+      "parentId": "fld_invoice",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_invoice_by_company",
+      "_type": "request",
+      "name": "Get Invoices by Company",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/invoice/by-company/{{ _.companyId }}",
+      "parentId": "fld_invoice",
+      "metaSortKey": 3
+    },
+    {
+      "_id": "req_invoice_overdue",
+      "_type": "request",
+      "name": "Get Overdue Invoices",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/invoice/overdue/by-company/{{ _.companyId }}",
+      "parentId": "fld_invoice",
+      "metaSortKey": 4
+    },
+    {
+      "_id": "req_invoice_record_payment",
+      "_type": "request",
+      "name": "Record Payment on Invoice",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/invoice/{{ _.invoiceId }}/payment",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"amount\": 500.00\n}"
+      },
+      "parentId": "fld_invoice",
+      "metaSortKey": 5
+    },
+    {
+      "_id": "fld_payment",
+      "_type": "request_group",
+      "name": "11. Payment",
+      "description": "Payment management endpoints",
+      "parentId": "wrk_erp_sage_x3",
+      "metaSortKey": 11
+    },
+    {
+      "_id": "req_payment_create",
+      "_type": "request",
+      "name": "Create Payment",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/payment",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"companyId\": {{ _.companyId }},\n  \"paymentNumber\": \"PAY-2025-001\",\n  \"paymentType\": \"RECEIVED\",\n  \"businessPartnerId\": {{ _.businessPartnerId }},\n  \"invoiceId\": {{ _.invoiceId }},\n  \"paymentDate\": \"2025-01-20\",\n  \"currencyId\": {{ _.currencyId }},\n  \"exchangeRate\": 1.0,\n  \"amount\": 500.00,\n  \"paymentMethod\": \"BANK_TRANSFER\",\n  \"reference\": \"REF123456\",\n  \"notes\": \"Paiement reçu pour facture INV-2025-001\"\n}"
+      },
+      "parentId": "fld_payment",
+      "metaSortKey": 1
+    },
+    {
+      "_id": "req_payment_list",
+      "_type": "request",
+      "name": "Get All Payments",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/payment",
+      "parentId": "fld_payment",
+      "metaSortKey": 2
+    },
+    {
+      "_id": "req_payment_total",
+      "_type": "request",
+      "name": "Get Total Payments by Type",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/payment/total/by-company/{{ _.companyId }}/by-type/RECEIVED",
+      "parentId": "fld_payment",
+      "metaSortKey": 3
+    }
+  ]
+}

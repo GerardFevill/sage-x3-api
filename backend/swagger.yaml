@@ -1,0 +1,1710 @@
+openapi: 3.0.0
+info:
+  title: ERP Sage X3 MVP API
+  version: 1.0.0
+  description: |
+    Professional REST API backend for an ERP system inspired by Sage X3.
+
+    ## Features
+    - Multi-company support with data isolation
+    - Multi-currency with exchange rates
+    - Multi-fiscal year accounting periods
+    - Double-entry accounting
+    - Complete invoice and payment management
+    - Product and warehouse management
+    - Business partner (customers/suppliers) management
+
+    ## Technical Stack
+    - NestJS 10+ (TypeScript)
+    - TypeORM with PostgreSQL
+    - Swagger/OpenAPI documentation
+    - Jest unit testing
+
+  contact:
+    name: Gerard Fevill
+    email: gerard.nouglozeh@protonmail.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development server
+  - url: https://api.example.com/api
+    description: Production server
+
+tags:
+  - name: company
+    description: Company management operations
+  - name: currency
+    description: Currency management operations
+  - name: fiscal-year
+    description: Fiscal year management operations
+  - name: account
+    description: Chart of accounts operations
+  - name: journal
+    description: Journal management operations
+  - name: tax-code
+    description: Tax code management operations
+  - name: business-partner
+    description: Business partner (customers/suppliers) operations
+  - name: product
+    description: Product management operations
+  - name: warehouse
+    description: Warehouse management operations
+  - name: invoice
+    description: Invoice management operations
+  - name: payment
+    description: Payment management operations
+
+components:
+  schemas:
+    # Company schemas
+    Company:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        code:
+          type: string
+          maxLength: 20
+          example: "FR01"
+        name:
+          type: string
+          maxLength: 200
+          example: "ACME France"
+        legalName:
+          type: string
+          maxLength: 200
+          example: "ACME France SAS"
+        taxId:
+          type: string
+          maxLength: 50
+          example: "FR12345678901"
+        address:
+          type: string
+          maxLength: 500
+        city:
+          type: string
+          maxLength: 100
+        postalCode:
+          type: string
+          maxLength: 20
+        countryCode:
+          type: string
+          maxLength: 2
+          example: "FR"
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateCompanyDto:
+      type: object
+      required:
+        - code
+        - name
+        - countryCode
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 20
+        name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        legalName:
+          type: string
+          maxLength: 200
+        taxId:
+          type: string
+          maxLength: 50
+        address:
+          type: string
+          maxLength: 500
+        city:
+          type: string
+          maxLength: 100
+        postalCode:
+          type: string
+          maxLength: 20
+        countryCode:
+          type: string
+          length: 2
+
+    # Currency schemas
+    Currency:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        code:
+          type: string
+          maxLength: 3
+          example: "EUR"
+        name:
+          type: string
+          maxLength: 100
+          example: "Euro"
+        symbol:
+          type: string
+          maxLength: 10
+          example: "€"
+        decimalPlaces:
+          type: integer
+          minimum: 0
+          maximum: 10
+          default: 2
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateCurrencyDto:
+      type: object
+      required:
+        - code
+        - name
+        - symbol
+      properties:
+        code:
+          type: string
+          minLength: 3
+          maxLength: 3
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 10
+        decimalPlaces:
+          type: integer
+          minimum: 0
+          maximum: 10
+          default: 2
+
+    # Fiscal Year schemas
+    FiscalYear:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        code:
+          type: string
+          maxLength: 20
+          example: "FY2024"
+        name:
+          type: string
+          maxLength: 200
+          example: "Fiscal Year 2024"
+        startDate:
+          type: string
+          format: date
+          example: "2024-01-01"
+        endDate:
+          type: string
+          format: date
+          example: "2024-12-31"
+        isClosed:
+          type: boolean
+          default: false
+        closedDate:
+          type: string
+          format: date-time
+          nullable: true
+        numberOfPeriods:
+          type: integer
+          minimum: 1
+          maximum: 24
+          default: 12
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateFiscalYearDto:
+      type: object
+      required:
+        - companyId
+        - code
+        - name
+        - startDate
+        - endDate
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        code:
+          type: string
+          minLength: 1
+          maxLength: 20
+        name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        numberOfPeriods:
+          type: integer
+          minimum: 1
+          maximum: 24
+
+    # Account schemas
+    Account:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        accountCode:
+          type: string
+          maxLength: 20
+          example: "401000"
+        accountName:
+          type: string
+          maxLength: 200
+          example: "Suppliers"
+        accountType:
+          type: string
+          enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+          example: "LIABILITY"
+        parentAccountId:
+          type: integer
+          format: int64
+          nullable: true
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateAccountDto:
+      type: object
+      required:
+        - companyId
+        - accountCode
+        - accountName
+        - accountType
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        accountCode:
+          type: string
+          minLength: 1
+          maxLength: 20
+        accountName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        accountType:
+          type: string
+          enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+        parentAccountId:
+          type: integer
+          format: int64
+
+    # Journal schemas
+    Journal:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        journalCode:
+          type: string
+          maxLength: 20
+          example: "VEN"
+        journalName:
+          type: string
+          maxLength: 200
+          example: "Sales Journal"
+        journalType:
+          type: string
+          enum: [SALES, PURCHASE, BANK, CASH, GENERAL]
+          example: "SALES"
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateJournalDto:
+      type: object
+      required:
+        - companyId
+        - journalCode
+        - journalName
+        - journalType
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        journalCode:
+          type: string
+          minLength: 1
+          maxLength: 20
+        journalName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        journalType:
+          type: string
+          enum: [SALES, PURCHASE, BANK, CASH, GENERAL]
+
+    # Tax Code schemas
+    TaxCode:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        taxCode:
+          type: string
+          maxLength: 20
+          example: "VAT20"
+        taxName:
+          type: string
+          maxLength: 200
+          example: "VAT 20%"
+        taxRate:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+          example: 20.00
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTaxCodeDto:
+      type: object
+      required:
+        - companyId
+        - taxCode
+        - taxName
+        - taxRate
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        taxCode:
+          type: string
+          minLength: 1
+          maxLength: 20
+        taxName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        taxRate:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+
+    # Business Partner schemas
+    BusinessPartner:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        partnerCode:
+          type: string
+          maxLength: 20
+          example: "CUST001"
+        partnerName:
+          type: string
+          maxLength: 200
+          example: "Acme Corporation"
+        partnerType:
+          type: string
+          enum: [CUSTOMER, SUPPLIER, BOTH]
+          example: "CUSTOMER"
+        email:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+          maxLength: 50
+        address:
+          type: string
+          maxLength: 500
+        city:
+          type: string
+          maxLength: 100
+        postalCode:
+          type: string
+          maxLength: 20
+        countryCode:
+          type: string
+          maxLength: 2
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateBusinessPartnerDto:
+      type: object
+      required:
+        - companyId
+        - partnerCode
+        - partnerName
+        - partnerType
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        partnerCode:
+          type: string
+          minLength: 1
+          maxLength: 20
+        partnerName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        partnerType:
+          type: string
+          enum: [CUSTOMER, SUPPLIER, BOTH]
+        email:
+          type: string
+          format: email
+          maxLength: 100
+        phone:
+          type: string
+          maxLength: 50
+        address:
+          type: string
+          maxLength: 500
+        city:
+          type: string
+          maxLength: 100
+        postalCode:
+          type: string
+          maxLength: 20
+        countryCode:
+          type: string
+          length: 2
+
+    # Product schemas
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        productCode:
+          type: string
+          maxLength: 50
+          example: "PROD001"
+        productName:
+          type: string
+          maxLength: 200
+          example: "Laptop Computer"
+        productType:
+          type: string
+          enum: [GOODS, SERVICE, CONSUMABLE]
+          example: "GOODS"
+        description:
+          type: string
+        category:
+          type: string
+          maxLength: 100
+        unitPrice:
+          type: number
+          format: decimal
+          example: 999.99
+        costPrice:
+          type: number
+          format: decimal
+          example: 750.00
+        stockQuantity:
+          type: number
+          format: decimal
+          default: 0
+        unitOfMeasure:
+          type: string
+          maxLength: 20
+          example: "PCS"
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateProductDto:
+      type: object
+      required:
+        - companyId
+        - productCode
+        - productName
+        - productType
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        productCode:
+          type: string
+          minLength: 1
+          maxLength: 50
+        productName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        productType:
+          type: string
+          enum: [GOODS, SERVICE, CONSUMABLE]
+        description:
+          type: string
+        category:
+          type: string
+          maxLength: 100
+        unitPrice:
+          type: number
+          format: decimal
+          minimum: 0
+        costPrice:
+          type: number
+          format: decimal
+          minimum: 0
+        stockQuantity:
+          type: number
+          format: decimal
+        unitOfMeasure:
+          type: string
+          maxLength: 20
+
+    # Warehouse schemas
+    Warehouse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        warehouseCode:
+          type: string
+          maxLength: 20
+          example: "WH001"
+        warehouseName:
+          type: string
+          maxLength: 200
+          example: "Main Warehouse"
+        address:
+          type: string
+          maxLength: 500
+        city:
+          type: string
+          maxLength: 100
+        postalCode:
+          type: string
+          maxLength: 20
+        country:
+          type: string
+          maxLength: 100
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateWarehouseDto:
+      type: object
+      required:
+        - companyId
+        - warehouseCode
+        - warehouseName
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        warehouseCode:
+          type: string
+          minLength: 1
+          maxLength: 20
+        warehouseName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        address:
+          type: string
+          maxLength: 500
+        city:
+          type: string
+          maxLength: 100
+        postalCode:
+          type: string
+          maxLength: 20
+        country:
+          type: string
+          maxLength: 100
+
+    # Invoice schemas
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        invoiceNumber:
+          type: string
+          maxLength: 50
+          example: "INV-2025-001"
+        invoiceType:
+          type: string
+          enum: [SALES, PURCHASE, CREDIT_NOTE, DEBIT_NOTE]
+          example: "SALES"
+        businessPartnerId:
+          type: integer
+          format: int64
+        invoiceDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        currencyId:
+          type: integer
+          format: int64
+        exchangeRate:
+          type: number
+          format: decimal
+          default: 1.0
+        totalBeforeTax:
+          type: number
+          format: decimal
+          example: 1000.00
+        totalTax:
+          type: number
+          format: decimal
+          example: 200.00
+        totalAmount:
+          type: number
+          format: decimal
+          example: 1200.00
+        paidAmount:
+          type: number
+          format: decimal
+          default: 0
+        balance:
+          type: number
+          format: decimal
+        status:
+          type: string
+          enum: [DRAFT, POSTED, PARTIALLY_PAID, PAID, CANCELLED]
+          default: DRAFT
+        fiscalYearId:
+          type: integer
+          format: int64
+        notes:
+          type: string
+        poReference:
+          type: string
+          maxLength: 100
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateInvoiceDto:
+      type: object
+      required:
+        - companyId
+        - invoiceNumber
+        - invoiceType
+        - businessPartnerId
+        - invoiceDate
+        - dueDate
+        - currencyId
+        - totalBeforeTax
+        - totalAmount
+        - fiscalYearId
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        invoiceNumber:
+          type: string
+          minLength: 1
+          maxLength: 50
+        invoiceType:
+          type: string
+          enum: [SALES, PURCHASE, CREDIT_NOTE, DEBIT_NOTE]
+        businessPartnerId:
+          type: integer
+          format: int64
+        invoiceDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        currencyId:
+          type: integer
+          format: int64
+        exchangeRate:
+          type: number
+          format: decimal
+        totalBeforeTax:
+          type: number
+          format: decimal
+          minimum: 0
+        totalTax:
+          type: number
+          format: decimal
+          minimum: 0
+        totalAmount:
+          type: number
+          format: decimal
+          minimum: 0
+        fiscalYearId:
+          type: integer
+          format: int64
+        notes:
+          type: string
+        poReference:
+          type: string
+          maxLength: 100
+
+    # Payment schemas
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        companyId:
+          type: integer
+          format: int64
+        paymentNumber:
+          type: string
+          maxLength: 50
+          example: "PAY-2025-001"
+        paymentType:
+          type: string
+          enum: [RECEIVED, SENT]
+          example: "RECEIVED"
+        businessPartnerId:
+          type: integer
+          format: int64
+        invoiceId:
+          type: integer
+          format: int64
+          nullable: true
+        paymentDate:
+          type: string
+          format: date
+        currencyId:
+          type: integer
+          format: int64
+        exchangeRate:
+          type: number
+          format: decimal
+          default: 1.0
+        amount:
+          type: number
+          format: decimal
+          example: 500.00
+        paymentMethod:
+          type: string
+          enum: [CASH, BANK_TRANSFER, CHECK, CREDIT_CARD, OTHER]
+          example: "BANK_TRANSFER"
+        reference:
+          type: string
+          maxLength: 100
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, CANCELLED]
+          default: PENDING
+        isActive:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreatePaymentDto:
+      type: object
+      required:
+        - companyId
+        - paymentNumber
+        - paymentType
+        - businessPartnerId
+        - paymentDate
+        - currencyId
+        - amount
+        - paymentMethod
+      properties:
+        companyId:
+          type: integer
+          format: int64
+        paymentNumber:
+          type: string
+          minLength: 1
+          maxLength: 50
+        paymentType:
+          type: string
+          enum: [RECEIVED, SENT]
+        businessPartnerId:
+          type: integer
+          format: int64
+        invoiceId:
+          type: integer
+          format: int64
+        paymentDate:
+          type: string
+          format: date
+        currencyId:
+          type: integer
+          format: int64
+        exchangeRate:
+          type: number
+          format: decimal
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+        paymentMethod:
+          type: string
+          enum: [CASH, BANK_TRANSFER, CHECK, CREDIT_CARD, OTHER]
+        reference:
+          type: string
+          maxLength: 100
+        notes:
+          type: string
+
+    # Common schemas
+    Error:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        timestamp:
+          type: string
+          format: date-time
+        path:
+          type: string
+          example: "/api/company"
+        method:
+          type: string
+          example: "POST"
+        error:
+          type: string
+          example: "Bad Request"
+        message:
+          type: string
+          example: "Validation failed"
+        errors:
+          type: array
+          items:
+            type: string
+
+paths:
+  # Company endpoints
+  /company:
+    get:
+      tags:
+        - company
+      summary: List all companies
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Company'
+    post:
+      tags:
+        - company
+      summary: Create a new company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompanyDto'
+      responses:
+        '201':
+          description: Company created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Company code already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /company/{id}:
+    get:
+      tags:
+        - company
+      summary: Get company by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '404':
+          description: Company not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+        - company
+      summary: Update company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompanyDto'
+      responses:
+        '200':
+          description: Company updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '404':
+          description: Company not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - company
+      summary: Soft delete company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Company deleted successfully
+        '404':
+          description: Company not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /company/by-code/{code}:
+    get:
+      tags:
+        - company
+      summary: Get company by code
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '404':
+          description: Company not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Currency endpoints
+  /currency:
+    get:
+      tags:
+        - currency
+      summary: List all currencies
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Currency'
+    post:
+      tags:
+        - currency
+      summary: Create a new currency
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCurrencyDto'
+      responses:
+        '201':
+          description: Currency created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Currency code already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /currency/{id}:
+    get:
+      tags:
+        - currency
+      summary: Get currency by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+        '404':
+          description: Currency not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+        - currency
+      summary: Update currency
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCurrencyDto'
+      responses:
+        '200':
+          description: Currency updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+    delete:
+      tags:
+        - currency
+      summary: Soft delete currency
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Currency deleted successfully
+
+  # Fiscal Year endpoints
+  /fiscal-year:
+    get:
+      tags:
+        - fiscal-year
+      summary: List all fiscal years
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FiscalYear'
+    post:
+      tags:
+        - fiscal-year
+      summary: Create a new fiscal year
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFiscalYearDto'
+      responses:
+        '201':
+          description: Fiscal year created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalYear'
+
+  /fiscal-year/{id}:
+    get:
+      tags:
+        - fiscal-year
+      summary: Get fiscal year by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalYear'
+    patch:
+      tags:
+        - fiscal-year
+      summary: Update fiscal year
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFiscalYearDto'
+      responses:
+        '200':
+          description: Fiscal year updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalYear'
+    delete:
+      tags:
+        - fiscal-year
+      summary: Soft delete fiscal year
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Fiscal year deleted successfully
+
+  /fiscal-year/{id}/close:
+    post:
+      tags:
+        - fiscal-year
+      summary: Close fiscal year
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Fiscal year closed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalYear'
+
+  /fiscal-year/{id}/reopen:
+    post:
+      tags:
+        - fiscal-year
+      summary: Reopen fiscal year
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Fiscal year reopened successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalYear'
+
+  # Invoice endpoints
+  /invoice:
+    get:
+      tags:
+        - invoice
+      summary: List all invoices
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+    post:
+      tags:
+        - invoice
+      summary: Create a new invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceDto'
+      responses:
+        '201':
+          description: Invoice created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+
+  /invoice/{id}:
+    get:
+      tags:
+        - invoice
+      summary: Get invoice by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+    patch:
+      tags:
+        - invoice
+      summary: Update invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceDto'
+      responses:
+        '200':
+          description: Invoice updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+    delete:
+      tags:
+        - invoice
+      summary: Soft delete invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Invoice deleted successfully
+
+  /invoice/{id}/payment:
+    post:
+      tags:
+        - invoice
+      summary: Record a payment for an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+              properties:
+                amount:
+                  type: number
+                  format: decimal
+                  example: 500.00
+      responses:
+        '200':
+          description: Payment recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+
+  /invoice/by-company/{companyId}:
+    get:
+      tags:
+        - invoice
+      summary: Get invoices by company
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SALES, PURCHASE, CREDIT_NOTE, DEBIT_NOTE]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, POSTED, PARTIALLY_PAID, PAID, CANCELLED]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+
+  /invoice/overdue/by-company/{companyId}:
+    get:
+      tags:
+        - invoice
+      summary: Get overdue invoices by company
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+
+  # Payment endpoints
+  /payment:
+    get:
+      tags:
+        - payment
+      summary: List all payments
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+    post:
+      tags:
+        - payment
+      summary: Create a new payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentDto'
+      responses:
+        '201':
+          description: Payment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+
+  /payment/{id}:
+    get:
+      tags:
+        - payment
+      summary: Get payment by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+    patch:
+      tags:
+        - payment
+      summary: Update payment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentDto'
+      responses:
+        '200':
+          description: Payment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+    delete:
+      tags:
+        - payment
+      summary: Soft delete payment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Payment deleted successfully
+
+  /payment/by-company/{companyId}:
+    get:
+      tags:
+        - payment
+      summary: Get payments by company
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [RECEIVED, SENT]
+        - name: method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [CASH, BANK_TRANSFER, CHECK, CREDIT_CARD, OTHER]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+
+  /payment/total/by-company/{companyId}/by-type/{type}:
+    get:
+      tags:
+        - payment
+      summary: Get total payment amount by company and type
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [RECEIVED, SENT]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: number
+                    format: decimal
+                    example: 15000.00
